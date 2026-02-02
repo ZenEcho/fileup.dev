@@ -138,6 +138,7 @@ import { useRouter } from 'vue-router'
 import { NDropdown, NAvatar, NButton, useMessage } from 'naive-ui'
 import logoUrl from '../assets/logo256.png'
 import { useAuthStore } from '../stores/auth'
+import { API_BASE_URL } from '../api'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -164,7 +165,7 @@ const toggleMobileMenu = () => {
 }
 
 const login = () => {
-  window.location.href = 'http://localhost:3000/auth/github'
+  window.location.href = `${API_BASE_URL}/auth/github`
 }
 
 const userOptions = computed(() => {

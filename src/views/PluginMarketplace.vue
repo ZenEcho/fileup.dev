@@ -7,7 +7,7 @@ import {
   NInput, NButton, NGrid, NGridItem, NCard, NTag, useMessage, NAlert, NAvatar, NDropdown
 } from 'naive-ui'
 import { useAuthStore } from '../stores/auth'
-import api from '../api'
+import api, { API_BASE_URL } from '../api'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -85,7 +85,7 @@ const handleUserSelect = (key: string) => {
 }
 
 const login = () => {
-  window.location.href = 'http://localhost:3000/auth/github'
+  window.location.href = `${API_BASE_URL}/auth/github`
 }
 
 const fetchPlugins = async () => {

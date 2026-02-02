@@ -2,8 +2,10 @@
 import axios from 'axios';
 import { useAuthStore } from './stores/auth';
 
+export const API_BASE_URL = 'https://server.fileup.dev';
+
 const api = axios.create({
-  baseURL: 'http://localhost:3000', // Update if backend port changes
+  baseURL: API_BASE_URL,
 });
 
 api.interceptors.request.use((config) => {
