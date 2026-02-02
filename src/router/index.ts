@@ -35,6 +35,11 @@ const router = createRouter({
       path: '/auth/callback',
       name: 'auth-callback',
       component: AuthCallback
+    },
+    {
+      path: '/api/auth/github/callback',
+      name: 'auth-callback-alias',
+      component: AuthCallback
     }
   ],
   scrollBehavior(_to, _from, savedPosition) {
