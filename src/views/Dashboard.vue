@@ -4,7 +4,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
-  NCard, NButton, NTag, useMessage, NGrid, NGridItem, NSpace, NPopconfirm
+  NCard, NButton, NTag, useMessage, NGrid, NGridItem, NPopconfirm
 } from 'naive-ui'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'

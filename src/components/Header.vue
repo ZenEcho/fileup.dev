@@ -144,6 +144,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const message = useMessage()
 
+const docsLink = 'https://github.com/ZenEcho/GioPic_Web_Extension/blob/main/README_zh-CN.md'
+
 const isMobileMenuOpen = ref(false)
 
 const links = computed(() => [
