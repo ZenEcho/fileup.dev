@@ -52,7 +52,7 @@ const router = createRouter({
 })
 
 // Handle double slashes in URL which might come from backend redirects
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   if (to.path.startsWith('//')) {
     next({ path: to.path.replace(/^\/+/, '/'), query: to.query, hash: to.hash })
   } else {
