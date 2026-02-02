@@ -1,0 +1,14 @@
+/* Empty style.css to avoid conflicts with UnoCSS */
+/* 默认css配置 */
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+button {
+  border: none;
+  background: none;
+}
