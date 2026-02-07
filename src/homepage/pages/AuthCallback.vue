@@ -12,8 +12,8 @@
 import { onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { useAuthStore } from '../stores/auth';
-import { API_BASE_URL } from '../api';
+import { useAuthStore } from '@common/stores/auth';
+import { API_BASE_URL } from '@common/services/api';
 
 const route = useRoute();
 const router = useRouter();

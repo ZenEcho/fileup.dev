@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import PluginMarketplace from '../views/PluginMarketplace.vue'
-import AuthCallback from '../views/AuthCallback.vue'
+import HomeView from '@homepage/pages/HomeView.vue'
+import PluginMarketplace from '@frontend/pages/PluginMarketplace.vue'
+import AuthCallback from '@homepage/pages/AuthCallback.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,17 +19,17 @@ const router = createRouter({
     {
       path: '/plugins/submit',
       name: 'submit-plugin',
-      component: () => import('../views/SubmitPlugin.vue')
+      component: () => import('@frontend/pages/SubmitPlugin.vue')
     },
     {
       path: '/admin/review',
       name: 'admin-review',
-      component: () => import('../views/AdminReview.vue')
+      component: () => import('@backstage/pages/AdminReview.vue')
     },
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: () => import('../views/Dashboard.vue')
+      component: () => import('@frontend/pages/Dashboard.vue')
     },
     {
       path: '/auth/callback',

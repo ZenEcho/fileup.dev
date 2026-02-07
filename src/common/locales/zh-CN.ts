@@ -129,6 +129,10 @@ export default {
     },
     desc: 'GioPic Web Extension 是一款强大的浏览器扩展，支持 Lsky Pro、S3、OSS 等多节点并发上传。支持拖拽、粘贴、右键菜单，让素材收集从未如此高效。',
     install: '安装到 Chrome',
+    installEdge: '安装到 Edge',
+    chromeStore: 'Chrome 商店',
+    edgeStore: 'Edge 商店',
+    otherVersions: '其他版本下载',
     source: '源码构建',
     imageAlt: 'GioPic 主界面'
   },
@@ -166,6 +170,18 @@ export default {
       desc: '在网页上看到喜欢的图片？只需点击右键选择“GioPic 上传”，即可将其转存到您的私有图床。',
       features: ['绕过防盗链限制', '保留原始画质', '后台静默处理'],
       imageAlt: '右键上传演示'
+    },
+    section3: {
+      title: '多节点同步，数据备份',
+      desc: '支持同时配置多个存储节点，一次上传，多处备份。确保您的数据安全，并自动生成不同平台的访问链接。',
+      features: ['并行上传技术', '失败自动重试', '多链接生成'],
+      imageAlt: '多节点上传演示'
+    },
+    section4: {
+      title: '一键配置，零门槛',
+      desc: '当您访问兰空图床、简单图床等支持的站点时，扩展会自动检测并提示一键添加配置，免去繁琐的手动填写。',
+      features: ['智能站点识别', '自动获取 Token', '即刻开始使用'],
+      imageAlt: '一键配置演示'
     }
   },
   providers: {

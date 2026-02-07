@@ -21,8 +21,7 @@
     "vue-router": "4"
   },
   "devDependencies": {
-    "@iconify-json/fa-brands": "^1.2.2",
-    "@iconify-json/fa-solid": "^1.2.2",
+    "@iconify-json/lineicons": "^1.2.2",
     "@iconify-json/ph": "^1.2.2",
     "@types/node": "^24.10.9",
     "@vitejs/plugin-vue": "^6.0.3",

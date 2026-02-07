@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-import { useAuthStore } from './stores/auth';
+import { useAuthStore } from '@common/stores/auth';
 
 export const API_BASE_URL = 'https://server.fileup.dev';
 

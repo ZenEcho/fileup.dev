@@ -6,8 +6,8 @@ import { useRouter } from 'vue-router'
 import { 
   NInput, NButton, NGrid, NGridItem, NCard, NTag, useMessage, NAlert, NAvatar, NDropdown
 } from 'naive-ui'
-import { useAuthStore } from '../stores/auth'
-import api, { API_BASE_URL } from '../api'
+import { useAuthStore } from '@common/stores/auth'
+import api, { API_BASE_URL } from '@common/services/api'
 
 const { t } = useI18n()
 const message = useMessage()

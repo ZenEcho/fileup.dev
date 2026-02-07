@@ -136,9 +136,9 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NDropdown, NAvatar, NButton, useMessage } from 'naive-ui'
-import logoUrl from '../assets/logo256.png'
-import { useAuthStore } from '../stores/auth'
-import { API_BASE_URL } from '../api'
+import logoUrl from '@common/assets/logo256.png'
+import { useAuthStore } from '@common/stores/auth'
+import { API_BASE_URL } from '@common/services/api'
 
 const { t, locale } = useI18n()
 const router = useRouter()

@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useStorage } from '@vueuse/core';
-import api from '../api';
+import api from '@common/services/api';
 
 export const useAuthStore = defineStore('auth', () => {
   const token = useStorage('auth_token', '');

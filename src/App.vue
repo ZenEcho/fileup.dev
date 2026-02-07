@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui'
 import { RouterView } from 'vue-router'
-import Header from './components/Header.vue'
-import Footer from './components/Footer.vue'
+import Header from '@common/components/Header.vue'
+import Footer from '@common/components/Footer.vue'
 
 // Custom theme override for Naive UI to match the design
 const themeOverrides = {
@@ -30,5 +30,9 @@ const themeOverrides = {
 /* Global styles if any remaining not covered by UnoCSS or Naive UI */
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+body {
+  overflow-x: hidden;
 }
 </style>

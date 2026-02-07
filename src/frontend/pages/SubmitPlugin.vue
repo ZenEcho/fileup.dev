@@ -7,8 +7,8 @@ import {
   NForm, NFormItem, NInput, NButton, useMessage, NCard,
   NSelect, NSwitch, NDivider
 } from 'naive-ui'
-import { useAuthStore } from '../stores/auth'
-import api from '../api'
+import { useAuthStore } from '@common/stores/auth'
+import api from '@common/services/api'
 
 const router = useRouter()
 const route = useRoute()

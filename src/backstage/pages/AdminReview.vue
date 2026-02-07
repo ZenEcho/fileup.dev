@@ -6,8 +6,8 @@ import { useI18n } from 'vue-i18n'
 import { 
   NCard, NButton, NTag, useMessage, NCode, NSpace, NTabs, NTabPane, NPopconfirm, NGrid, NGridItem
 } from 'naive-ui'
-import { useAuthStore } from '../stores/auth'
-import api from '../api'
+import { useAuthStore } from '@common/stores/auth'
+import api from '@common/services/api'
 
 const router = useRouter()
 const message = useMessage()
