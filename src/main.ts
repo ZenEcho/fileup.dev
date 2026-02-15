@@ -12,3 +12,7 @@ app.use(router)
 app.use(i18n)
 app.mount('#app')
 
+// 初始化 WebMCP 协议
+import { setupWebMCP } from './plugins/webmcp'
+setupWebMCP()
+
