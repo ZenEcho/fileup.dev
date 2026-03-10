@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui'
 import { RouterView } from 'vue-router'
 import Header from '@common/components/Header.vue'
@@ -11,17 +13,22 @@ const themeOverrides = {
     primaryColorHover: '#4f46e5',
   }
 }
+
+const route = useRoute()
+const isAdminRoute = computed(() => {
+  return route.path.startsWith('/admin')
+})
 </script>
 
 <template>
   <NConfigProvider :theme-overrides="themeOverrides">
     <NGlobalStyle />
     <NMessageProvider>
-      <Header />
+      <Header v-if="!isAdminRoute" />
       <main>
         <RouterView />
       </main>
-      <Footer />
+      <Footer v-if="!isAdminRoute" />
     </NMessageProvider>
   </NConfigProvider>
 </template>

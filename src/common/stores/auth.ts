@@ -1,17 +1,17 @@
-
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useStorage } from '@vueuse/core';
-import api from '@common/services/api';
+import { fetchAuthMe } from '@common/api';
+import type { AuthUser } from '@common/types';
 
 export const useAuthStore = defineStore('auth', () => {
   const token = useStorage('auth_token', '');
-  const user = ref<any>(null);
-  let fetchUserPromise: Promise<any> | null = null;
+  const user = ref<AuthUser | null>(null);
+  let fetchUserPromise: Promise<void> | null = null;
 
   const login = (newToken: string) => {
     token.value = newToken;
-    fetchUser();
+    void fetchUser();
   };
 
   const logout = () => {
@@ -21,24 +21,30 @@ export const useAuthStore = defineStore('auth', () => {
   };
 
   const fetchUser = async () => {
-    if (!token.value) return;
-    
-    // Return existing promise if request is in flight
-    if (fetchUserPromise) return fetchUserPromise;
-
-    try {
-      fetchUserPromise = api.get('/auth/me');
-      const response = await fetchUserPromise;
-      user.value = response.data;
-    } catch (error) {
-      console.error('Fetch user failed:', error);
-      // Don't logout immediately on network errors, only on 401
-      if ((error as any).response?.status === 401) {
-        logout();
-      }
-    } finally {
-      fetchUserPromise = null;
+    if (!token.value) {
+      user.value = null;
+      return;
     }
+
+    if (fetchUserPromise) {
+      return fetchUserPromise;
+    }
+
+    fetchUserPromise = (async () => {
+      try {
+        const response = await fetchAuthMe();
+        user.value = response.data;
+      } catch (error) {
+        console.error('Fetch user failed:', error);
+        if ((error as { response?: { status?: number } }).response?.status === 401) {
+          logout();
+        }
+      } finally {
+        fetchUserPromise = null;
+      }
+    })();
+
+    return fetchUserPromise;
   };
 
   return { token, user, login, logout, fetchUser };

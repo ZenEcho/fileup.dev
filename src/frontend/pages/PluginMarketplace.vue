@@ -1,44 +1,77 @@
-
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { 
-  NInput, NButton, NGrid, NGridItem, NCard, NTag, useMessage, NAlert, NAvatar, NDropdown
+import {
+  NAlert,
+  NAvatar,
+  NButton,
+  NDropdown,
+  NInput,
+  useMessage,
 } from 'naive-ui'
 import { useAuthStore } from '@common/stores/auth'
-import api, { API_BASE_URL } from '@common/services/api'
+import { createPluginReview, deletePluginReview, fetchPluginList, fetchPluginReviews as fetchPluginReviewsApi, recordPluginDownload, upsertPluginReviewReply } from '@common/api'
+import { useDateFormat } from '@common/composables'
+import { MarketplaceGridSection, PluginDetailsModal } from '@frontend/sections/marketplace'
+import type { PluginEntity, PluginMarketplaceItem, PluginReview } from '@common/types'
+import { getPluginAuthorName, validatePluginContent } from '@common/utils/plugin'
 
 const { t } = useI18n()
 const message = useMessage()
 const router = useRouter()
 const authStore = useAuthStore()
+const { formatDateTime } = useDateFormat()
 
-// Plugin Interface
-interface PluginMeta {
-  id: string
-  name: string
-  version: string
-  description: string
-  author: {
-    username: string
-    avatar?: string
-  }
-  icon: string
-  downloads: number
-  installed: boolean
-  enabled: boolean
-  content?: any
-  versions?: any[]
-  updatedAt?: string
-}
+type PluginMeta = PluginMarketplaceItem
 
 const plugins = ref<PluginMeta[]>([])
 const loading = ref(false)
-
 const searchQuery = ref('')
 const sortBy = ref('popular')
 const isExtensionInstalled = ref(false)
+const selectedPlugin = ref<PluginMeta | null>(null)
+const reviews = ref<PluginReview[]>([])
+const reviewsLoading = ref(false)
+const reviewSubmitting = ref(false)
+const replySubmittingId = ref<string | null>(null)
+const deletingReviewId = ref<string | null>(null)
+const reviewSummary = ref({
+  total: 0,
+  averageRating: 0,
+})
+const reviewForm = ref({
+  rating: 5,
+  content: '',
+})
+const replyDraftMap = ref<Record<string, string>>({})
+
+const resetReviewForm = () => {
+  reviewForm.value = {
+    rating: 5,
+    content: '',
+  }
+}
+
+const closeDetails = () => {
+  selectedPlugin.value = null
+  reviews.value = []
+  reviewSummary.value = {
+    total: 0,
+    averageRating: 0,
+  }
+  replyDraftMap.value = {}
+  resetReviewForm()
+}
+
+const isDetailsVisible = computed({
+  get: () => selectedPlugin.value !== null,
+  set: (value: boolean) => {
+    if (!value) {
+      closeDetails()
+    }
+  }
+})
 
 const sortOptions = [
   { label: 'marketplace.sort.popular', value: 'popular' },
@@ -46,79 +79,139 @@ const sortOptions = [
 ]
 
 const filteredPlugins = computed(() => {
-  let result = plugins.value.filter(plugin => {
-    const matchesSearch = plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
-                          plugin.description.toLowerCase().includes(searchQuery.value.toLowerCase())
-    return matchesSearch
+  const lowerQuery = searchQuery.value.toLowerCase()
+  const result = plugins.value.filter((plugin) => {
+    return plugin.name.toLowerCase().includes(lowerQuery) || plugin.description.toLowerCase().includes(lowerQuery)
   })
 
   result.sort((a, b) => {
     if (sortBy.value === 'popular') {
       return b.downloads - a.downloads
-    } else if (sortBy.value === 'newest') {
+    }
+
+    if (sortBy.value === 'newest') {
       return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
     }
+
     return 0
   })
 
   return result
 })
 
-const userOptions = computed(() => [
-  { label: 'Submit Plugin', key: 'submit' },
-  { label: 'Logout', key: 'logout' }
-])
+const userOptions = computed(() => {
+  const options = [
+    { label: 'Submit Plugin', key: 'submit' },
+    { label: 'Logout', key: 'logout' }
+  ]
 
-if (authStore.user?.role === 'ADMIN') {
-  userOptions.value.unshift({ label: 'Admin Review', key: 'admin' })
-}
+  if (authStore.user?.role === 'ADMIN') {
+    options.unshift({ label: 'Admin Review', key: 'admin' })
+  }
+
+  return options
+})
+
+const isCurrentUserAdmin = computed(() => authStore.user?.role === 'ADMIN')
+
+const isCurrentUserPluginAuthor = computed(() => {
+  if (!selectedPlugin.value || !authStore.user?.userId) {
+    return false
+  }
+
+  return selectedPlugin.value.authorId === authStore.user.userId
+})
+
+const canCurrentUserReply = computed(() => {
+  return isCurrentUserPluginAuthor.value || isCurrentUserAdmin.value
+})
+
+const hasCurrentUserReviewed = computed(() => {
+  const currentUserId = authStore.user?.userId
+  if (!currentUserId) {
+    return false
+  }
+
+  return reviews.value.some((review) => review.reviewer.userId === currentUserId)
+})
 
 const handleUserSelect = (key: string) => {
   if (key === 'logout') {
     authStore.logout()
     message.success('Logged out')
+    void router.push('/login')
   } else if (key === 'submit') {
     router.push('/plugins/submit')
   } else if (key === 'admin') {
-    router.push('/admin/review')
+    router.push('/admin')
   }
 }
 
 const login = () => {
-  window.location.href = `${API_BASE_URL}/auth/github`
+  router.push({
+    path: '/login',
+    query: { next: '/plugins' },
+  })
+}
+const fetchReviews = async (pluginId?: string) => {
+  if (!pluginId) {
+    return
+  }
+
+  reviewsLoading.value = true
+  try {
+    const res = await fetchPluginReviewsApi(pluginId)
+    reviews.value = Array.isArray(res.data.reviews) ? res.data.reviews : []
+    reviewSummary.value = {
+      total: Number(res.data.summary?.total) || 0,
+      averageRating: Number(res.data.summary?.averageRating) || 0,
+    }
+
+    const nextDraftMap: Record<string, string> = {}
+    for (const review of reviews.value) {
+      nextDraftMap[review.id] = ''
+    }
+    replyDraftMap.value = nextDraftMap
+  } catch (error) {
+    console.error('Failed to fetch reviews', error)
+    message.error(t('marketplace.reviewLoadFailed'))
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+const openDetails = async (plugin: PluginMeta) => {
+  selectedPlugin.value = plugin
+  await fetchReviews(plugin.id)
 }
 
 const fetchPlugins = async () => {
   loading.value = true
   try {
-    const res = await api.get('/plugins')
-    // Transform backend data to match frontend interface
-    plugins.value = res.data.map((p: any) => {
-      const content = p.versions?.[0]?.content
-      const contentAuthor = content?.author
-      const authorName = typeof contentAuthor === 'string' 
-        ? contentAuthor 
-        : (contentAuthor?.username || p.author.username)
+    const res = await fetchPluginList()
+    plugins.value = res.data.map((plugin: PluginEntity) => {
+      const pluginContent = (plugin.versions?.[0]?.content || null) as Record<string, any> | null
+      const authorName = getPluginAuthorName(pluginContent?.author, plugin.author?.username || 'Unknown')
 
       return {
-        id: p.id,
-        name: p.name,
-        version: p.versions?.[0]?.version || '0.0.0',
-        description: p.description,
+        id: plugin.id,
+        name: plugin.name,
+        version: plugin.versions?.[0]?.version || '0.0.0',
+        description: plugin.description,
+        authorId: plugin.authorId,
         author: {
           username: authorName,
-          avatar: p.author.avatar // Keep uploader's avatar as fallback/default
+          avatar: plugin.author?.avatar || undefined
         },
-        icon: p.icon,
-        downloads: Number(p.downloads) || 0,
+        icon: (plugin as any).icon,
+        downloads: Number(plugin.downloads) || 0,
         installed: false,
         enabled: false,
-        content: content,
-        updatedAt: p.updatedAt
+        content: pluginContent,
+        updatedAt: plugin.updatedAt
       }
     })
-    
-    // If extension is installed, sync status
+
     if (isExtensionInstalled.value) {
       window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
     }
@@ -131,121 +224,220 @@ const fetchPlugins = async () => {
 }
 
 const checkExtensionInstalled = () => {
-   const installed = document.documentElement.hasAttribute('data-giopic-page-bundle')
-   if (installed !== isExtensionInstalled.value) {
-     isExtensionInstalled.value = installed
-     if (installed) {
-       window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
-     }
-   }
- }
- 
- const handleInstall = (plugin: PluginMeta) => {
-   if (!isExtensionInstalled.value) {
-     message.warning(t('marketplace.extensionNotInstalled'))
-     return
-   }
- 
-   // Construct the payload expected by the extension
-  // Ensure payload is JSON-serializable (removes any Vue proxies or non-clonable objects)
-  const content = plugin.content ? JSON.parse(JSON.stringify(plugin.content)) : {}
-  const payload = JSON.parse(JSON.stringify({
-    id: plugin.id,
-    name: plugin.name,
-    version: plugin.version,
-    description: plugin.description,
-    icon: plugin.icon,
-    ...content // Spread the JSON content (script, inputs, etc.)
-  }))
+  const installed = document.documentElement.hasAttribute('data-giopic-page-bundle')
+  if (installed !== isExtensionInstalled.value) {
+    isExtensionInstalled.value = installed
+    if (installed) {
+      window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
+    }
+  }
+}
 
-  // Record download
-  api.post(`/plugins/${plugin.id}/download`).catch(err => {
-    // Ignore errors (e.g. already downloaded from this IP)
+const handleInstall = (plugin: PluginMeta) => {
+  if (!isExtensionInstalled.value) {
+    message.warning(t('marketplace.extensionNotInstalled'))
+    return
+  }
+
+  const validation = validatePluginContent(plugin.content)
+  if (!validation.valid || !validation.content) {
+    message.error(t('marketplace.invalidPayload'))
+    return
+  }
+
+  recordPluginDownload(plugin.id).catch((err) => {
     console.debug('Download record failed:', err)
   })
 
   window.postMessage({
     type: 'GIOPIC_INSTALL_PLUGIN',
-    plugin: payload
+    plugin: validation.content
   }, '*')
- }
+}
 
- const handleUninstall = (id: string) => {
-   if (!isExtensionInstalled.value) return
-   window.postMessage({ 
-     type: 'GIOPIC_UNINSTALL_PLUGIN',
-     pluginId: id
-   }, '*')
- }
+const handleUninstall = (id: string) => {
+  if (!isExtensionInstalled.value) return
+  window.postMessage({
+    type: 'GIOPIC_UNINSTALL_PLUGIN',
+    pluginId: id
+  }, '*')
+}
 
- const handleToggle = (id: string, enabled: boolean) => {
-   if (!isExtensionInstalled.value) return
-   window.postMessage({ 
-     type: 'GIOPIC_TOGGLE_PLUGIN',
-     pluginId: id,
-     enabled: enabled
-   }, '*')
- }
- 
- const handleMessage = (event: MessageEvent) => {
-   const data = event.data
-   if (!data || typeof data !== 'object') return
- 
-   switch (data.type) {
-     case 'GIOPIC_INSTALL_PLUGIN_RESULT':
-       if (data.success) {
-         message?.success(t('marketplace.installSuccess') || 'Plugin installed successfully!')
-         window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
-       } else {
-         message?.error((t('marketplace.installFailed') || 'Installation failed: ') + (data.error || 'Unknown error'))
-       }
-       break
- 
-     case 'GIOPIC_UNINSTALL_PLUGIN_RESULT':
-       if (data.success) {
-         message?.success(t('marketplace.uninstallSuccess') || 'Plugin uninstalled successfully!')
-         window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
-       } else {
-         message?.error((t('marketplace.uninstallFailed') || 'Uninstall failed: ') + (data.error || 'Unknown error'))
-       }
-       break
- 
-     case 'GIOPIC_TOGGLE_PLUGIN_RESULT':
-       if (data.success) {
-         window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
-       } else {
-          message?.error((t('marketplace.toggleFailed') || 'Operation failed: ') + (data.error || 'Unknown error'))
-       }
-       break
- 
-     case 'GIOPIC_GET_INSTALLED_PLUGINS_RESULT':
-        if (data && Array.isArray(data.plugins)) {
-          const installedIds = new Set(data.plugins.filter((p: any) => p && p.id).map((p: any) => p.id))
-          const enabledMap = new Map<string, boolean>(data.plugins.filter((p: any) => p && p.id).map((p: any) => [p.id, Boolean(p.enabled)]))
-          
-          plugins.value.forEach(p => {
-            p.installed = installedIds.has(p.id)
-            p.enabled = enabledMap.get(p.id) || false
-          })
-        }
-        break
+const handleToggle = (id: string, enabled: boolean) => {
+  if (!isExtensionInstalled.value) return
+  window.postMessage({
+    type: 'GIOPIC_TOGGLE_PLUGIN',
+    pluginId: id,
+    enabled
+  }, '*')
+}
 
-      case 'GIOPIC_PLUGINS_UPDATED':
-        window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
-        break
-    }
+const submitReview = async () => {
+  const plugin = selectedPlugin.value
+  if (!plugin) {
+    return
   }
 
+  if (!authStore.user) {
+    message.warning(t('marketplace.reviewLoginRequired'))
+    return
+  }
+
+  if (hasCurrentUserReviewed.value) {
+    message.warning(t('marketplace.reviewDuplicateForbidden'))
+    return
+  }
+
+  if (!reviewForm.value.content.trim()) {
+    message.warning(t('marketplace.reviewContentRequired'))
+    return
+  }
+
+  reviewSubmitting.value = true
+  try {
+    await createPluginReview(plugin.id, {
+      rating: reviewForm.value.rating,
+      content: reviewForm.value.content,
+    })
+    message.success(t('marketplace.reviewSubmitted'))
+    await fetchReviews(plugin.id)
+  } catch (error) {
+    console.error('Failed to submit review', error)
+
+    const responseMessage = (error as any)?.response?.data?.message
+    const normalizedMessage = Array.isArray(responseMessage)
+      ? responseMessage.join(' ')
+      : typeof responseMessage === 'string'
+        ? responseMessage
+        : ''
+
+    if (normalizedMessage.includes('already reviewed')) {
+      message.warning(t('marketplace.reviewDuplicateForbidden'))
+    } else {
+      message.error(t('marketplace.reviewSubmitFailed'))
+    }
+  } finally {
+    reviewSubmitting.value = false
+  }
+}
+
+const submitReply = async (reviewId: string) => {
+  const plugin = selectedPlugin.value
+  if (!plugin) {
+    return
+  }
+
+  if (!canCurrentUserReply.value) {
+    message.warning(t('marketplace.replyAuthorOnly'))
+    return
+  }
+
+  const content = (replyDraftMap.value[reviewId] || '').trim()
+  if (!content) {
+    message.warning(t('marketplace.replyContentRequired'))
+    return
+  }
+
+  replySubmittingId.value = reviewId
+  try {
+    await upsertPluginReviewReply(plugin.id, reviewId, {
+      content,
+    })
+    message.success(t('marketplace.replySubmitted'))
+    await fetchReviews(plugin.id)
+  } catch (error) {
+    console.error('Failed to submit reply', error)
+    message.error(t('marketplace.replySubmitFailed'))
+  } finally {
+    replySubmittingId.value = null
+  }
+}
+
+const deleteReview = async (reviewId: string) => {
+  const plugin = selectedPlugin.value
+  if (!plugin) {
+    return
+  }
+
+  if (!isCurrentUserAdmin.value) {
+    message.warning(t('marketplace.reviewDeleteAdminOnly'))
+    return
+  }
+
+  const confirmed = window.confirm(t('marketplace.confirmDeleteReview'))
+  if (!confirmed) {
+    return
+  }
+
+  deletingReviewId.value = reviewId
+  try {
+    await deletePluginReview(plugin.id, reviewId)
+    message.success(t('marketplace.reviewDeleted'))
+    await fetchReviews(plugin.id)
+  } catch (error) {
+    console.error('Failed to delete review', error)
+    message.error(t('marketplace.reviewDeleteFailed'))
+  } finally {
+    deletingReviewId.value = null
+  }
+}
+
+const handleMessage = (event: MessageEvent) => {
+  const data = event.data
+  if (!data || typeof data !== 'object') return
+
+  switch (data.type) {
+    case 'GIOPIC_INSTALL_PLUGIN_RESULT':
+      if (data.success) {
+        message.success(t('marketplace.installSuccess'))
+        window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
+      } else {
+        message.error(t('marketplace.installFailed') + (data.error || 'Unknown error'))
+      }
+      break
+
+    case 'GIOPIC_UNINSTALL_PLUGIN_RESULT':
+      if (data.success) {
+        message.success(t('marketplace.uninstallSuccess'))
+        window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
+      } else {
+        message.error(t('marketplace.uninstallFailed') + (data.error || 'Unknown error'))
+      }
+      break
+
+    case 'GIOPIC_TOGGLE_PLUGIN_RESULT':
+      if (data.success) {
+        window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
+      } else {
+        message.error(t('marketplace.toggleFailed') + (data.error || 'Unknown error'))
+      }
+      break
+
+    case 'GIOPIC_GET_INSTALLED_PLUGINS_RESULT':
+      if (Array.isArray(data.plugins)) {
+        const installedIds = new Set(data.plugins.filter((plugin: any) => plugin && plugin.id).map((plugin: any) => plugin.id))
+        const enabledMap = new Map<string, boolean>(data.plugins.filter((plugin: any) => plugin && plugin.id).map((plugin: any) => [plugin.id, Boolean(plugin.enabled)]))
+
+        plugins.value.forEach((plugin) => {
+          plugin.installed = installedIds.has(plugin.id)
+          plugin.enabled = enabledMap.get(plugin.id) || false
+        })
+      }
+      break
+
+    case 'GIOPIC_PLUGINS_UPDATED':
+      window.postMessage({ type: 'GIOPIC_GET_INSTALLED_PLUGINS' }, '*')
+      break
+  }
+}
 
 const timer = ref<number | null>(null)
 
 onMounted(() => {
-  // Only fetch if not already loaded, though Header usually handles this.
-  // We can skip it here to avoid double request since Header.vue is always present.
   if (!authStore.user && authStore.token) {
     authStore.fetchUser()
   }
-  
+
   fetchPlugins()
   checkExtensionInstalled()
   timer.value = window.setInterval(checkExtensionInstalled, 1000)
@@ -260,30 +452,28 @@ onUnmounted(() => {
 
 <template>
   <div class="pt-25 pb-20 container-custom min-h-screen">
-    <!-- Auth Header -->
     <div class="absolute top-4 right-4 z-50">
       <div v-if="authStore.user" class="flex items-center gap-2">
         <NDropdown :options="userOptions" @select="handleUserSelect">
-          <div class="flex items-center gap-2 cursor-pointer bg-white/10 px-3 py-1 rounded-full hover:bg-white/20 transition">
-            <NAvatar round size="small" :src="authStore.user.avatar" />
+          <div
+            class="flex items-center gap-2 cursor-pointer bg-white/10 px-3 py-1 rounded-full hover:bg-white/20 transition">
+            <NAvatar round size="small" :src="authStore.user.avatar || undefined" />
             <span class="font-bold">{{ authStore.user.username }}</span>
           </div>
         </NDropdown>
       </div>
       <div v-else>
         <NButton type="primary" round @click="login">
-          <template #icon><div class="i-ph-github-logo" /></template>
+          <template #icon>
+            <div class="i-ph-github-logo" />
+          </template>
           Login with GitHub
         </NButton>
       </div>
     </div>
 
-    <!-- Top Warning Banner for missing extension -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="opacity-0 -translate-y-4"
-      enter-to-class="opacity-100 translate-y-0"
-    >
+    <Transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0 -translate-y-4"
+      enter-to-class="opacity-100 translate-y-0">
       <div v-if="!isExtensionInstalled" class="fixed top-80px left-0 w-full z-40 px-4 pointer-events-none">
         <div class="max-w-800px mx-auto pointer-events-auto">
           <NAlert type="warning" show-icon closable>
@@ -295,8 +485,11 @@ onUnmounted(() => {
                 <span class="font-800 text-1rem block md:inline">{{ t('marketplace.extensionNotInstalled') }}</span>
                 <p class="mt-1 text-0.9rem opacity-90">{{ t('marketplace.installExtensionTip') }}</p>
               </div>
-              <NButton type="warning" ghost round tag="a" href="https://github.com/ZenEcho/GioPic_Web_Extension" target="_blank">
-                <template #icon><div class="i-ph-download-simple-bold" /></template>
+              <NButton type="warning" ghost round tag="a" href="https://github.com/ZenEcho/GioPic_Web_Extension"
+                target="_blank">
+                <template #icon>
+                  <div class="i-ph-download-simple-bold" />
+                </template>
                 {{ t('marketplace.downloadLink') }}
               </NButton>
             </div>
@@ -313,23 +506,17 @@ onUnmounted(() => {
         {{ t('marketplace.subtitle') }}
       </p>
 
-      <a href="https://github.com/ZenEcho/GioPic_Web_Extension/blob/main/plugins/plugin_dev_guide.md" target="_blank" class="inline-flex items-center gap-2 px-6 py-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors decoration-none font-600">
+      <a href="https://github.com/ZenEcho/GioPic_Web_Extension/blob/main/plugins/plugin_dev_guide.md" target="_blank"
+        class="inline-flex items-center gap-2 px-6 py-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors decoration-none font-600">
         <div class="i-ph-code" />
         {{ t('marketplace.devGuide') }}
       </a>
     </div>
 
-    <!-- Search and Filter -->
     <div class="flex flex-col md:flex-row gap-4 mb-10 justify-between items-center">
       <div class="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
-        <NButton 
-          v-for="opt in sortOptions" 
-          :key="opt.value"
-          :type="sortBy === opt.value ? 'primary' : 'default'"
-          secondary
-          round
-          @click="sortBy = opt.value"
-        >
+        <NButton v-for="opt in sortOptions" :key="opt.value" :type="sortBy === opt.value ? 'primary' : 'default'"
+          secondary round @click="sortBy = opt.value">
           {{ t(opt.label) }}
         </NButton>
       </div>
@@ -342,85 +529,36 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Plugin Grid -->
-    <div v-if="loading" class="flex justify-center py-20">
-      <div class="animate-spin text-4xl text-primary">⌛</div>
-    </div>
-    <NGrid v-else x-gap="24" y-gap="24" cols="1 s:2 m:3" responsive="screen">
-      <NGridItem v-for="plugin in filteredPlugins" :key="plugin.id">
-        <NCard hoverable class="h-full border-border rounded-xl transition-all hover:-translate-y-1">
-          <div class="flex items-start justify-between mb-4">
-            <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
-              <img v-if="plugin.icon.startsWith('http')" :src="plugin.icon" class="w-full h-full object-cover" />
-              <div v-else :class="[plugin.icon, 'text-2rem']" />
-            </div>
-            <div class="flex flex-col items-end">
-              <NTag :type="plugin.installed ? (plugin.enabled ? 'success' : 'warning') : 'default'" size="small" round class="mb-1">
-                {{ plugin.installed ? (plugin.enabled ? t('marketplace.installed') : t('marketplace.disable')) : t('marketplace.install') }}
-              </NTag>
-              <span class="text-0.75rem text-text-tertiary">v{{ plugin.version }}</span>
-            </div>
-          </div>
-          
-          <h3 class="text-1.2rem font-700 text-text-main mb-2">{{ plugin.name }}</h3>
-          <p class="text-text-secondary text-0.9rem mb-4 line-clamp-2 min-h-2.7em">
-            {{ plugin.description }}
-          </p>
-          
-          <div class="flex items-center gap-4 text-0.8rem text-text-tertiary mb-6">
-            <span class="flex items-center gap-1">
-              <NAvatar v-if="plugin.author.avatar" :src="plugin.author.avatar" round size="small" />
-              <div v-else class="i-ph-user" /> 
-              {{ plugin.author.username || 'Unknown' }}
-            </span>
-            <span class="flex items-center gap-1">
-              <div class="i-ph-download-simple" /> {{ plugin.downloads }}
-            </span>
-          </div>
+    <MarketplaceGridSection
+      :loading="loading"
+      :filtered-plugins="filteredPlugins"
+      :on-open-details="openDetails"
+      :on-install="handleInstall"
+      :on-toggle="handleToggle"
+      :on-uninstall="handleUninstall"
+    />
 
-          <template #action>
-            <div class="flex flex-col gap-2">
-              <NButton 
-                block 
-                :type="plugin.installed ? 'default' : 'primary'"
-                :secondary="!plugin.installed"
-                @click="handleInstall(plugin)"
-                v-if="!plugin.installed"
-              >
-                {{ t('marketplace.install') }}
-              </NButton>
-              
-              <div v-else class="flex gap-2">
-                <NButton 
-                  flex-1
-                  :type="plugin.enabled ? 'warning' : 'success'"
-                  secondary
-                  @click="handleToggle(plugin.id, !plugin.enabled)"
-                >
-                  {{ plugin.enabled ? t('marketplace.disable') : t('marketplace.enable') }}
-                </NButton>
-                <NButton 
-                  type="error"
-                  secondary
-                  @click="handleUninstall(plugin.id)"
-                >
-                  {{ t('marketplace.uninstall') }}
-                </NButton>
-              </div>
-            </div>
-          </template>
-        </NCard>
-      </NGridItem>
-    </NGrid>
+    <PluginDetailsModal
+      v-model:show="isDetailsVisible"
+      :selected-plugin="selectedPlugin"
+      :review-summary="reviewSummary"
+      :auth-user="authStore.user"
+      :has-current-user-reviewed="hasCurrentUserReviewed"
+      :review-form="reviewForm"
+      :review-submitting="reviewSubmitting"
+      :reviews-loading="reviewsLoading"
+      :reviews="reviews"
+      :can-current-user-reply="canCurrentUserReply"
+      :is-current-user-admin="isCurrentUserAdmin"
+      :reply-draft-map="replyDraftMap"
+      :reply-submitting-id="replySubmittingId"
+      :deleting-review-id="deletingReviewId"
+      :format-date-time="formatDateTime"
+      :on-login="login"
+      :on-submit-review="submitReview"
+      :on-submit-reply="submitReply"
+      :on-delete-review="deleteReview"
+    />
   </div>
 </template>
 
-<style scoped>
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-</style>

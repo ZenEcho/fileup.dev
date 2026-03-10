@@ -57,7 +57,7 @@
             <template v-if="authStore.user">
                <NDropdown :options="userOptions" @select="handleUserSelect">
                 <div class="flex items-center gap-2 cursor-pointer hover:bg-black/5 px-3 py-1.5 rounded-full transition-colors">
-                  <NAvatar round size="small" :src="authStore.user.avatar" />
+                  <NAvatar round size="small" :src="authStore.user.avatar || undefined" />
                   <span class="font-600 text-0.9rem">{{ authStore.user.username }}</span>
                 </div>
                </NDropdown>
@@ -107,10 +107,10 @@
           
           <template v-if="authStore.user">
              <div class="flex items-center gap-3" @click="router.push('/plugins/submit'); isMobileMenuOpen = false">
-                <NAvatar round size="small" :src="authStore.user.avatar" />
+                <NAvatar round size="small" :src="authStore.user.avatar || undefined" />
                 <span class="font-600">{{ authStore.user.username }}</span>
              </div>
-             <button @click="authStore.logout(); isMobileMenuOpen = false" class="text-left font-600 text-error">{{ t('auth.logout') }}</button>
+             <button @click="logout(true)" class="text-left font-600 text-error">{{ t('auth.logout') }}</button>
           </template>
           <template v-else>
              <button @click="login" class="text-left font-600 text-primary">{{ t('auth.login') }}</button>
@@ -134,13 +134,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NDropdown, NAvatar, NButton, useMessage } from 'naive-ui'
 import logoUrl from '@common/assets/logo256.png'
 import { useAuthStore } from '@common/stores/auth'
-import { API_BASE_URL } from '@common/services/api'
 
 const { t, locale } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const message = useMessage()
@@ -165,35 +165,57 @@ const toggleMobileMenu = () => {
 }
 
 const login = () => {
-  window.location.href = `${API_BASE_URL}/auth/github`
+  const next = route.path === '/login' || route.path === '/register'
+    ? '/dashboard'
+    : route.fullPath
+
+  router.push({
+    path: '/login',
+    query: { next },
+  })
 }
 
 const userOptions = computed(() => {
   const opts = [
-    { label: t('dashboard.title'), key: 'dashboard' },
-    { label: t('submit.title'), key: 'submit' },
-    { label: t('auth.logout'), key: 'logout' }
+    { label: t('header.profile'), key: 'profile' },
+    { label: t('header.security'), key: 'security' },
+    { label: t('header.console'), key: 'dashboard' },
+    { label: t('auth.logout'), key: 'logout' },
   ]
+
   if (authStore.user?.role === 'ADMIN') {
     opts.unshift({ label: t('admin.title'), key: 'admin' })
   }
+
   return opts
 })
 
+const logout = (closeMobileMenu = false) => {
+  authStore.logout()
+
+  if (closeMobileMenu) {
+    isMobileMenuOpen.value = false
+  }
+
+  message.success(t('auth.logoutSuccess'))
+  void router.push('/login')
+}
+
 const handleUserSelect = (key: string) => {
   if (key === 'logout') {
-    authStore.logout()
-    message.success(t('auth.logoutSuccess'))
-  } else if (key === 'submit') {
-    router.push('/plugins/submit')
+    void logout()
+  } else if (key === 'profile') {
+    router.push('/dashboard/profile')
+  } else if (key === 'security') {
+    router.push('/dashboard/security')
   } else if (key === 'admin') {
-    router.push('/admin/review')
+    router.push('/admin')
   } else if (key === 'dashboard') {
     router.push('/dashboard')
   }
 }
-
 onMounted(() => {
   authStore.fetchUser()
 })
 </script>
+

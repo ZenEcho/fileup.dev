@@ -1,14 +1,22 @@
-
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { 
-  NForm, NFormItem, NInput, NButton, useMessage, NCard,
-  NSelect, NSwitch, NDivider
+import {
+  NAlert,
+  NButton,
+  NCard,
+  NForm,
+  NFormItem,
+  NInput,
+  useMessage,
 } from 'naive-ui'
 import { useAuthStore } from '@common/stores/auth'
-import api from '@common/services/api'
+import { createPlugin, fetchPluginDetail } from '@common/api'
+import { ScriptCodeEditor } from '@common/ui'
+import type { PluginStatus } from '@common/types'
+import { SubmitTestAndPreview } from '@frontend/sections/submit'
+import { getPluginAuthorName, validatePluginContent } from '@common/utils/plugin'
 
 const router = useRouter()
 const route = useRoute()
@@ -30,71 +38,164 @@ const model = ref({
 })
 
 const isSyncing = ref(false)
+const loading = ref(false)
 
-// Watch form fields to update JSON content
+type JsonRecord = Record<string, unknown>
+
+interface ConfigScriptEditor {
+  key: string
+  inputIndex: number
+  inputName: string
+  inputLabel: string
+  script: string
+}
+
+const configScripts = ref<ConfigScriptEditor[]>([])
+
+const isRecord = (value: unknown): value is JsonRecord => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const extractConfigScripts = (content: unknown): ConfigScriptEditor[] => {
+  if (!isRecord(content) || !Array.isArray(content.inputs)) {
+    return []
+  }
+
+  return content.inputs.flatMap((input, inputIndex) => {
+    if (!isRecord(input) || !isRecord(input.dataSource)) {
+      return []
+    }
+
+    const inputName = typeof input.name === 'string' && input.name.trim() ? input.name : `inputs[${inputIndex}]`
+    const inputLabel = typeof input.label === 'string' ? input.label : ''
+    const script = typeof input.dataSource.script === 'string' ? input.dataSource.script : ''
+
+    return [{
+      key: `${inputIndex}:${inputName}`,
+      inputIndex,
+      inputName,
+      inputLabel,
+      script
+    }]
+  })
+}
+
+const applyConfigScriptsToContent = (content: JsonRecord, editors: ConfigScriptEditor[]) => {
+  if (!Array.isArray(content.inputs)) {
+    return false
+  }
+
+  let changed = false
+
+  for (const editor of editors) {
+    const input = content.inputs[editor.inputIndex]
+    if (!isRecord(input) || !isRecord(input.dataSource)) {
+      continue
+    }
+
+    const currentScript = typeof input.dataSource.script === 'string' ? input.dataSource.script : ''
+    if (currentScript !== editor.script) {
+      input.dataSource.script = editor.script
+      changed = true
+    }
+  }
+
+  return changed
+}
+
+type PluginAuditStatus = PluginStatus
+
+const isEditMode = computed(() => !!route.query.edit)
+const latestVersionInEditMode = ref('')
+const latestVersionStatusInEditMode = ref<PluginAuditStatus | ''>('')
+const configScriptSignature = computed(() => configScripts.value.map((item) => `${item.key}:${item.script}`).join('||'))
+
+const parsedContentState = computed(() => {
+  if (!model.value.content.trim()) {
+    return { content: null as Record<string, unknown> | null, error: '' }
+  }
+
+  try {
+    return {
+      content: JSON.parse(model.value.content) as Record<string, unknown>,
+      error: ''
+    }
+  } catch {
+    return {
+      content: null,
+      error: t('submit.invalidJson')
+    }
+  }
+})
+
 watch(
-  () => [model.value.id, model.value.name, model.value.description, model.value.icon, model.value.version, model.value.author, model.value.script],
+  () => [model.value.id, model.value.name, model.value.description, model.value.icon, model.value.version, model.value.author, model.value.script, configScriptSignature.value],
   () => {
     if (isSyncing.value) return
-    
+
     try {
-      const content = model.value.content ? JSON.parse(model.value.content) : {}
+      const parsedContent = model.value.content ? JSON.parse(model.value.content) : {}
+      if (!isRecord(parsedContent)) return
+
+      const content = parsedContent
       let changed = false
-      
+
       if (model.value.id && content.id !== model.value.id) { content.id = model.value.id; changed = true }
       if (model.value.name && content.name !== model.value.name) { content.name = model.value.name; changed = true }
       if (model.value.version && content.version !== model.value.version) { content.version = model.value.version; changed = true }
       if (model.value.description && content.description !== model.value.description) { content.description = model.value.description; changed = true }
-      if (model.value.icon && content.icon !== model.value.icon) { content.icon = model.value.icon; changed = true }
-      if (model.value.author && content.author !== model.value.author) { content.author = model.value.author; changed = true }
-      if (model.value.script && content.script !== model.value.script) { content.script = model.value.script; changed = true }
-      
+      if (model.value.icon !== undefined && content.icon !== model.value.icon) { content.icon = model.value.icon; changed = true }
+
+      const currentAuthor = getPluginAuthorName(content.author, '')
+      if (model.value.author && currentAuthor !== model.value.author) {
+        content.author = model.value.author
+        changed = true
+      }
+
+      if (content.script !== model.value.script) {
+        content.script = model.value.script
+        changed = true
+      }
+
+      if (applyConfigScriptsToContent(content, configScripts.value)) {
+        changed = true
+      }
+
       if (changed) {
         isSyncing.value = true
         model.value.content = JSON.stringify(content, null, 2)
-        // Reset flag after next tick to allow other watchers to fire safely if needed, 
-        // but mostly to prevent the content watcher from re-triggering form updates immediately
         setTimeout(() => { isSyncing.value = false }, 0)
       }
-    } catch (e) {
+    } catch {
       // Ignore JSON parse errors while typing in form
     }
   }
 )
 
-// Watch JSON content to update form fields (Reverse sync)
 watch(
   () => model.value.content,
   (newVal) => {
     if (isSyncing.value) return
-    
+
     try {
       const content = JSON.parse(newVal)
+      if (!isRecord(content)) return
+
       isSyncing.value = true
-      
-      if (content.id) model.value.id = content.id
-      if (content.name) model.value.name = content.name
-      if (content.version) model.value.version = content.version
-      if (content.description) model.value.description = content.description
-      if (content.icon) model.value.icon = content.icon
-      if (content.author) model.value.author = content.author
-      if (content.script) model.value.script = content.script
-      
+
+      if (typeof content.id === 'string') model.value.id = content.id
+      if (typeof content.name === 'string') model.value.name = content.name
+      if (typeof content.version === 'string') model.value.version = content.version
+      if (typeof content.description === 'string') model.value.description = content.description
+      if (typeof content.icon === 'string') model.value.icon = content.icon
+      if (content.author !== undefined) model.value.author = getPluginAuthorName(content.author, '')
+      model.value.script = typeof content.script === 'string' ? content.script : ''
+      configScripts.value = extractConfigScripts(content)
+
       setTimeout(() => { isSyncing.value = false }, 0)
-    } catch (e) {
+    } catch {
       // Ignore invalid JSON while typing
     }
   }
 )
-
-const previewInputs = computed(() => {
-  try {
-    const content = JSON.parse(model.value.content)
-    return Array.isArray(content.inputs) ? content.inputs : []
-  } catch (e) {
-    return []
-  }
-})
 
 const rules = {
   id: { required: true, message: 'ID is required', trigger: 'blur' },
@@ -103,31 +204,30 @@ const rules = {
   content: { required: true, message: 'Content is required', trigger: 'blur' }
 }
 
-const loading = ref(false)
-
-const isEditMode = computed(() => !!route.query.edit)
-
 const fetchPluginData = async (id: string) => {
   loading.value = true
   try {
-    // Add allStatus=true query param to fetch latest version regardless of status
-    const res = await api.get(`/plugins/${id}?allStatus=true`)
+    const res = await fetchPluginDetail(id, true)
     const plugin = res.data
     const latestVersion = plugin.versions[0]
-    
+    const latestContent = (latestVersion?.content || {}) as Record<string, any>
+
+    latestVersionInEditMode.value = latestVersion?.version || ''
+    latestVersionStatusInEditMode.value = (latestVersion?.status || '') as PluginAuditStatus | ''
+
     if (latestVersion) {
       model.value.id = plugin.id
-      model.value.name = plugin.name
-      model.value.description = plugin.description
-      model.value.icon = plugin.icon
-      // We should probably increment version automatically or let user do it.
-      // Let's keep the version as is, user must change it.
+      model.value.name = latestContent.name || plugin.name
+      model.value.description = latestContent.description || plugin.description
+      model.value.icon = latestContent.icon || (plugin as any).icon
       model.value.version = latestVersion.version
-      model.value.author = latestVersion.content?.author || ''
-      model.value.script = latestVersion.content?.script || ''
-      model.value.content = JSON.stringify(latestVersion.content, null, 2)
+      model.value.author = getPluginAuthorName(latestContent.author, '')
+      model.value.script = typeof latestContent.script === 'string' ? latestContent.script : ''
+      configScripts.value = extractConfigScripts(latestContent)
+      model.value.content = JSON.stringify(latestContent, null, 2)
+      model.value.changelog = latestVersion.changelog || ''
     }
-  } catch (error) {
+  } catch {
     message.error(t('dashboard.loadFailed'))
   } finally {
     loading.value = false
@@ -140,70 +240,100 @@ onMounted(async () => {
     router.push('/plugins')
     return
   }
-  
+
   if (route.query.edit) {
     await fetchPluginData(route.query.edit as string)
   }
 })
 
 const autoFill = () => {
-  try {
-    const contentJson = JSON.parse(model.value.content)
-    
-    if (contentJson.id) model.value.id = contentJson.id
-    if (contentJson.name) model.value.name = contentJson.name
-    if (contentJson.version) model.value.version = contentJson.version
-    if (contentJson.description) model.value.description = contentJson.description
-    if (contentJson.icon) model.value.icon = contentJson.icon
-    
-    message.success(t('submit.autoFillSuccess'))
-  } catch (error) {
+  if (!parsedContentState.value.content) {
     message.error(t('submit.invalidJson'))
+    return
   }
+
+  const contentJson = parsedContentState.value.content
+
+  if (typeof contentJson.id === 'string') model.value.id = contentJson.id
+  if (typeof contentJson.name === 'string') model.value.name = contentJson.name
+  if (typeof contentJson.version === 'string') model.value.version = contentJson.version
+  if (typeof contentJson.description === 'string') model.value.description = contentJson.description
+  if (typeof contentJson.icon === 'string') model.value.icon = contentJson.icon
+  if (contentJson.author !== undefined) model.value.author = getPluginAuthorName(contentJson.author, '')
+  if (typeof contentJson.script === 'string') model.value.script = contentJson.script
+  configScripts.value = extractConfigScripts(contentJson)
+
+  message.success(t('submit.autoFillSuccess'))
 }
 
 const submit = async (e: MouseEvent) => {
   e.preventDefault()
   if (loading.value) return
-  
-  try {
-    await (formRef.value as any)?.validate()
 
-    const contentJson = JSON.parse(model.value.content)
-    
-    // Auto-fill some fields from JSON if empty
-    // Force overwrite author, version, description, icon from form inputs to JSON content
-    // This ensures consistency between metadata and installed content
+  try {
+    await (formRef.value as { validate?: () => Promise<void> } | null)?.validate?.()
+
+    if (!parsedContentState.value.content) {
+      throw new SyntaxError('Invalid JSON content')
+    }
+
+    const contentJson = JSON.parse(JSON.stringify(parsedContentState.value.content)) as JsonRecord
     contentJson.id = model.value.id
     contentJson.name = model.value.name
     contentJson.version = model.value.version
     contentJson.description = model.value.description
     contentJson.icon = model.value.icon
     if (model.value.author) contentJson.author = model.value.author
-    if (model.value.script) contentJson.script = model.value.script
-    
-    // Also ensure author is set (optional, but good practice if not present)
-    // Note: We don't have user's name here easily unless we fetch it, 
-    // but the backend will set authorId. The JSON 'author' field is display-only.
-    // If user didn't set it in JSON, we could leave it or set it to current user.
-    // For now, let's trust the user's input or what they pasted.
-    
+    contentJson.script = model.value.script
+    applyConfigScriptsToContent(contentJson, configScripts.value)
+
+    const validation = validatePluginContent(contentJson)
+    if (!validation.valid || !validation.content) {
+      message.error(validation.errors[0] || t('submit.invalidJson'))
+      return
+    }
+
+    if (
+      isEditMode.value &&
+      latestVersionStatusInEditMode.value === 'REJECTED' &&
+      latestVersionInEditMode.value &&
+      model.value.version.trim() === latestVersionInEditMode.value
+    ) {
+      message.error(t('submit.rejectedNeedNewVersion'))
+      return
+    }
+
     loading.value = true
-    
-    await api.post('/plugins', {
+
+    await createPlugin({
       ...model.value,
-      content: contentJson
+      content: validation.content
     })
-    
+
     message.success(t('submit.success'))
     router.push('/plugins')
-  } catch (error: any) {
-    console.error(error)
+  } catch (error: unknown) {
     if (error instanceof SyntaxError) {
       message.error(t('submit.invalidJson'))
-    } else {
-      message.error(error.response?.data?.message || 'Submission failed')
+      return
     }
+
+    const responseData = (error as { response?: { data?: { code?: string; message?: string | string[] } } })?.response?.data
+    const responseCode = responseData?.code
+    const responseMessage = responseData?.message
+
+    if (responseCode === 'PLUGIN_VERSION_REJECTED_RESUBMIT_REQUIRES_NEW_VERSION') {
+      message.error(t('submit.rejectedNeedNewVersion'))
+      return
+    }
+
+    if (responseCode === 'PLUGIN_VERSION_ALREADY_EXISTS') {
+      message.error(t('submit.versionExistsNeedBump'))
+      return
+    }
+
+    const normalizedMessage = Array.isArray(responseMessage) ? responseMessage.join(', ') : responseMessage
+    message.error(normalizedMessage || 'Submission failed')
   } finally {
     loading.value = false
   }
@@ -211,106 +341,137 @@ const submit = async (e: MouseEvent) => {
 </script>
 
 <template>
-  <div class="pt-25 pb-20 container-custom min-h-screen max-w-800px mx-auto">
-    <NCard :title="t('submit.title')">
-      <NForm ref="formRef" :model="model" :rules="rules">
-        <NFormItem :label="t('submit.jsonLabel')" path="content">
-          <div class="w-full">
-            <NInput 
-              v-model:value="model.content" 
-              type="textarea" 
-              :rows="10" 
-              :placeholder="t('submit.jsonPlaceholder')" 
-            />
-            <div class="mt-2 text-right">
-              <NButton size="small" type="info" ghost @click="autoFill">
-                <div class="i-ph-magic-wand mr-1" />
+  <div class="pt-25 pb-20 container-custom min-h-screen xl:max-w-[1366px] mx-auto">
+    <div class="flex justify-between items-center mb-6 px-4 xl:px-0">
+      <h1 class="text-2xl font-bold text-gray-800">{{ t('submit.title') }}</h1>
+      <NButton type="primary" :loading="loading" @click="submit" size="large" class="shadow-sm">
+        <template #icon>
+          <div class="i-ph-paper-plane-tilt" />
+        </template>
+        {{ t('submit.submitBtn') }}
+      </NButton>
+    </div>
+
+    <NForm ref="formRef" :model="model" :rules="rules">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 px-4 xl:px-0">
+
+        <!-- Left Column: Primary Content (Editor & Metadata) -->
+        <div class="lg:col-span-5 flex flex-col gap-2">
+
+          <!-- 1. JSON Configuration -->
+          <NCard size="small" class="shadow-sm rounded-xl">
+            <template #header>
+              <div class="flex items-center gap-2">
+                <div class="i-ph-file-code text-blue-500 text-lg"></div>
+                <span class="font-semibold">{{ t('submit.jsonLabel') }}</span>
+              </div>
+            </template>
+            <template #header-extra>
+              <NButton size="small" type="primary" ghost @click="autoFill">
+                <template #icon>
+                  <div class="i-ph-magic-wand" />
+                </template>
                 {{ t('submit.autoFill') }}
               </NButton>
+            </template>
+            <NFormItem path="content" :show-label="false" class="!mb-0">
+              <NInput v-model:value="model.content" type="textarea" :rows="16"
+                :placeholder="t('submit.jsonPlaceholder')" class="font-mono text-sm" />
+            </NFormItem>
+          </NCard>
+
+
+          <NCard size="small" class="shadow-sm rounded-xl">
+            <template #header>
+              <div class="flex items-center gap-2">
+                <div class="i-ph-info text-gray-500 text-lg"></div>
+                <span class="font-semibold">{{ t('submit.basicInfo') }}</span>
+              </div>
+            </template>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+              <NFormItem :label="t('submit.id')" path="id">
+                <NInput v-model:value="model.id" :placeholder="t('submit.idPlaceholder')" :disabled="isEditMode" />
+              </NFormItem>
+              <NFormItem :label="t('submit.name')" path="name">
+                <NInput v-model:value="model.name" :placeholder="t('submit.namePlaceholder')" />
+              </NFormItem>
+              <NFormItem :label="t('submit.version')" path="version">
+                <NInput v-model:value="model.version" :placeholder="t('submit.versionPlaceholder')" />
+              </NFormItem>
+              <NFormItem :label="t('submit.author')" path="author">
+                <NInput v-model:value="model.author" :placeholder="t('submit.authorPlaceholder')" />
+              </NFormItem>
+              <NFormItem :label="t('submit.icon')" path="icon" class="sm:col-span-2">
+                <NInput v-model:value="model.icon" :placeholder="t('submit.iconPlaceholder')" />
+              </NFormItem>
             </div>
-          </div>
-        </NFormItem>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <NFormItem :label="t('submit.id')" path="id">
-            <NInput v-model:value="model.id" :placeholder="t('submit.idPlaceholder')" :disabled="isEditMode" />
-          </NFormItem>
-          
-          <NFormItem :label="t('submit.name')" path="name">
-            <NInput v-model:value="model.name" :placeholder="t('submit.namePlaceholder')" />
-          </NFormItem>
-          
-          <NFormItem :label="t('submit.version')" path="version">
-            <NInput v-model:value="model.version" :placeholder="t('submit.versionPlaceholder')" />
-          </NFormItem>
-          
-          <NFormItem :label="t('submit.author')" path="author">
-            <NInput v-model:value="model.author" :placeholder="t('submit.authorPlaceholder')" />
-          </NFormItem>
 
-          <NFormItem :label="t('submit.icon')" path="icon">
-            <NInput v-model:value="model.icon" :placeholder="t('submit.iconPlaceholder')" />
-          </NFormItem>
-        </div>
-        
-        <NFormItem :label="t('submit.desc')" path="description">
-          <NInput v-model:value="model.description" type="textarea" :placeholder="t('submit.descPlaceholder')" />
-        </NFormItem>
-        
-        <NFormItem :label="t('submit.script')" path="script">
-          <NInput v-model:value="model.script" type="textarea" :rows="10" :placeholder="t('submit.scriptPlaceholder')" />
-        </NFormItem>
+            <NFormItem :label="t('submit.desc')" path="description">
+              <NInput v-model:value="model.description" type="textarea" :placeholder="t('submit.descPlaceholder')" />
+            </NFormItem>
 
-        <!-- Configuration Preview Section -->
-        <div v-if="previewInputs.length > 0" class="mb-6">
-          <NDivider>{{ t('submit.configPreview') }}</NDivider>
-          <div class="bg-gray-50/50 p-6 rounded-xl border border-gray-200">
-            <div v-for="(input, index) in previewInputs" :key="index" class="mb-4 last:mb-0">
-              <div class="mb-1 flex items-center gap-2">
-                <span class="font-medium text-gray-700">{{ input.label || input.name }}</span>
-                <span v-if="input.required" class="text-red-500">*</span>
-                <span v-if="input.type === 'password'" class="text-xs bg-gray-200 px-1 rounded text-gray-500">Secret</span>
+            <NFormItem :label="t('submit.changelog')" path="changelog" class="!mb-0">
+              <NInput v-model:value="model.changelog" type="textarea" :placeholder="t('submit.changelogPlaceholder')" />
+            </NFormItem>
+          </NCard>
+          <!-- 2. Upload Script -->
+          <NCard size="small" class="shadow-sm rounded-xl">
+            <template #header>
+              <div class="flex items-center gap-2">
+                <div class="i-ph-file-js text-yellow-500 text-lg"></div>
+                <span class="font-semibold">{{ t('submit.script') }}</span>
               </div>
-              
-              <!-- Text / Password Input -->
-              <NInput 
-                v-if="!input.type || input.type === 'text' || input.type === 'password'" 
-                :type="input.type === 'password' ? 'password' : 'text'"
-                :placeholder="input.placeholder || input.help" 
-                :default-value="input.default"
-              />
-              
-              <!-- Select Input -->
-              <NSelect 
-                v-else-if="input.type === 'select'"
-                :options="input.options" 
-                :placeholder="input.placeholder"
-                :default-value="input.default"
-              />
-              
-              <!-- Checkbox / Switch -->
-              <div v-else-if="input.type === 'checkbox'" class="flex items-center">
-                 <NSwitch :default-value="input.default === true" />
-                 <span class="ml-2 text-sm text-gray-500">{{ input.help }}</span>
+            </template>
+            <NFormItem path="script" :show-label="false" class="!mb-0">
+              <ScriptCodeEditor v-model="model.script" class="w-full resize-y"
+                :placeholder="t('submit.scriptPlaceholder')" />
+            </NFormItem>
+          </NCard>
+          <NCard size="small" class="shadow-sm rounded-xl">
+            <template #header>
+              <div class="flex items-center gap-2">
+                <div class="i-ph-function text-emerald-500 text-lg"></div>
+                <span class="font-semibold">{{ t('submit.configScripts') }}</span>
               </div>
-
-              <div v-if="input.help && input.type !== 'checkbox'" class="mt-1 text-xs text-gray-400">
-                {{ input.help }}
-              </div>
+            </template>
+            <template #header-extra>
+              <span class="text-xs text-gray-500">inputs[].dataSource.script</span>
+            </template>
+            <div v-if="configScripts.length" class="flex flex-col gap-4">
+              <NFormItem v-for="item in configScripts" :key="item.key"
+                :label="item.inputLabel ? `${item.inputLabel} (${item.inputName})` : item.inputName" class="!mb-0">
+                <ScriptCodeEditor v-model="item.script" class="w-full resize-y"
+                  :placeholder="t('submit.configScriptPlaceholder')" />
+              </NFormItem>
             </div>
-          </div>
+            <NAlert v-else type="info">
+              {{ t('submit.noConfigScripts') }}
+            </NAlert>
+          </NCard>
+
+
+
+
         </div>
 
-        <NFormItem :label="t('submit.changelog')" path="changelog">
-          <NInput v-model:value="model.changelog" type="textarea" :placeholder="t('submit.changelogPlaceholder')" />
-        </NFormItem>
-        
-        <div class="flex justify-end">
-          <NButton type="primary" :loading="loading" @click="submit">
-            {{ t('submit.submitBtn') }}
-          </NButton>
+        <!-- Right Column: Secondary Support (Live Preview & Testing Sandbox) -->
+        <div class="lg:col-span-7 flex flex-col gap-2">
+          <SubmitTestAndPreview :parsed-content-state="parsedContentState" />
         </div>
-      </NForm>
-    </NCard>
+
+      </div>
+    </NForm>
   </div>
 </template>
+
+
+
+
+
+
+
+
+
+
+
