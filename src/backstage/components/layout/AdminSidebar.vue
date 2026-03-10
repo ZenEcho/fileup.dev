@@ -72,20 +72,18 @@ const handleMenuClick = (key: string) => {
 </script>
 
 <template>
-  <div class="admin-sidebar h-full flex flex-col bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800">
-    <div class="admin-brand px-4 text-center h-[60px] flex items-center justify-center border-b border-gray-100 dark:border-gray-800">
-      <div class="text-xl font-bold bg-gradient-to-r from-teal-500 to-cyan-500 bg-clip-text text-transparent dark:from-teal-400 dark:to-cyan-400 select-none tracking-wide">
-        Fileup Admin
+  <div
+    class="admin-sidebar h-full flex flex-col bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800">
+    <div
+      class="admin-brand px-4 text-center h-[60px] flex items-center justify-center border-b border-gray-100 dark:border-gray-800">
+      <div
+        class="text-xl font-bold bg-gradient-to-r from-teal-500 to-cyan-500 bg-clip-text text-transparent dark:from-teal-400 dark:to-cyan-400 select-none tracking-wide">
+        Admin
       </div>
     </div>
-    
+
     <div class="flex-1 overflow-y-auto px-3 py-4">
-      <NMenu
-        :value="activeKey"
-        :options="menuOptions"
-        @update:value="handleMenuClick"
-        class="admin-menu"
-      />
+      <NMenu :value="activeKey" :options="menuOptions" @update:value="handleMenuClick" class="admin-menu" />
     </div>
   </div>
 </template>
@@ -96,26 +94,31 @@ const handleMenuClick = (key: string) => {
   border-radius: 8px !important;
   margin-bottom: 4px;
 }
+
 .admin-menu .n-menu-item-content--selected {
   background: linear-gradient(to right, rgba(20, 184, 166, 0.1), rgba(6, 182, 212, 0.05)) !important;
   color: #0d9488 !important;
   font-weight: 600;
 }
+
 .dark .admin-menu .n-menu-item-content--selected {
   background: linear-gradient(to right, rgba(20, 184, 166, 0.2), rgba(6, 182, 212, 0.1)) !important;
   color: #2dd4bf !important;
 }
+
 .admin-menu .n-menu-item-content--selected .n-menu-item-content-header {
   color: #0d9488 !important;
 }
+
 .dark .admin-menu .n-menu-item-content--selected .n-menu-item-content-header {
   color: #2dd4bf !important;
 }
+
 .admin-menu .n-menu-item-content--selected .n-menu-item-content__icon {
   color: #0d9488 !important;
 }
+
 .dark .admin-menu .n-menu-item-content--selected .n-menu-item-content__icon {
   color: #2dd4bf !important;
 }
 </style>
-
