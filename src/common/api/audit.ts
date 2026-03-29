@@ -30,9 +30,11 @@ export const auditPluginVersion = (
   pluginId: string,
   version: string,
   status: PluginStatus,
+  reason?: string,
 ) =>
   apiClient.patch(`/plugins/${pluginId}/versions/${encodeURIComponent(version)}/audit`, {
     status,
+    reason,
   });
 
 export const fetchAdminUsers = (query: AdminUsersQuery = {}) =>

@@ -1,19 +1,29 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NAlert, NCard } from 'naive-ui'
 import PluginTester from '@frontend/components/PluginTester.vue'
 import { PluginContentPreview } from '@common/ui'
+import { isUploaderPlugin, validatePluginContent } from '@common/utils/plugin'
 
 interface ParsedContentState {
   content: Record<string, unknown> | null
   error: string
 }
 
-defineProps<{
+const props = defineProps<{
   parsedContentState: ParsedContentState
 }>()
 
 const { t } = useI18n()
+const canTestUploader = computed(() => {
+  if (!props.parsedContentState.content) {
+    return false
+  }
+
+  const validation = validatePluginContent(props.parsedContentState.content)
+  return validation.valid && !!validation.content && isUploaderPlugin(validation.content)
+})
 </script>
 
 <template>
@@ -28,7 +38,10 @@ const { t } = useI18n()
       <NAlert v-if="parsedContentState.error" type="warning" :title="t('submit.invalidJson')">
         {{ parsedContentState.error }}
       </NAlert>
-      <PluginTester v-else :content="parsedContentState.content" />
+      <PluginTester v-else-if="canTestUploader" :content="parsedContentState.content" />
+      <NAlert v-else type="info">
+        {{ t('submit.testerOnlyUploader') }}
+      </NAlert>
     </NCard>
 
     <NCard size="small" class="shadow-sm rounded-xl bg-gray-50/70 border border-gray-100">

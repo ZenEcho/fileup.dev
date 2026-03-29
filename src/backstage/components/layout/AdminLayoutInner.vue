@@ -36,6 +36,7 @@ onMounted(async () => {
       collapse-mode="width"
       :collapsed-width="64"
       :width="240"
+      native-scrollbar
       class="shadow-sm z-10"
     >
       <AdminSidebar />

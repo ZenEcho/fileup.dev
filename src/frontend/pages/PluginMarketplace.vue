@@ -15,6 +15,7 @@ import { createPluginReview, deletePluginReview, fetchPluginList, fetchPluginRev
 import { useDateFormat } from '@common/composables'
 import { MarketplaceGridSection, PluginDetailsModal } from '@frontend/sections/marketplace'
 import type { PluginEntity, PluginMarketplaceItem, PluginReview } from '@common/types'
+import type { PluginKind } from '@common/utils/plugin'
 import { getPluginAuthorName, validatePluginContent } from '@common/utils/plugin'
 
 const { t } = useI18n()
@@ -191,10 +192,22 @@ const fetchPlugins = async () => {
     const res = await fetchPluginList()
     plugins.value = res.data.map((plugin: PluginEntity) => {
       const pluginContent = (plugin.versions?.[0]?.content || null) as Record<string, any> | null
+      const pluginValidation = validatePluginContent(pluginContent)
+      const rawKind = pluginContent?.kind === 'site-detector'
+        ? 'site-detector'
+        : pluginContent?.kind === 'editor-adapter'
+          ? 'editor-adapter'
+          : pluginContent?.kind === 'uploader'
+            ? 'uploader'
+            : null
+      const pluginKind: PluginKind = pluginValidation.valid && pluginValidation.content
+        ? pluginValidation.content.kind
+        : (rawKind || 'uploader')
       const authorName = getPluginAuthorName(pluginContent?.author, plugin.author?.username || 'Unknown')
 
       return {
         id: plugin.id,
+        kind: pluginKind,
         name: plugin.name,
         version: plugin.versions?.[0]?.version || '0.0.0',
         description: plugin.description,

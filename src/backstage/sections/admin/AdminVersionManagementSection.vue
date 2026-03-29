@@ -37,6 +37,35 @@ const versionReasonModel = computed({
   get: () => props.versionReason,
   set: (value: string) => emit('update:versionReason', value),
 })
+
+const actionLabelMap: Record<string, string> = {
+  SUBMIT: '提交版本',
+  RESUBMIT: '重新提交',
+  AUDIT_APPROVED: '审核通过',
+  AUDIT_REJECTED: '审核拒绝',
+  AUDIT_CHANGES_REQUIRED: '打回修改',
+  VISIBILITY_PUBLIC: '可见性设为公开',
+  VISIBILITY_PRIVATE: '可见性设为私有',
+  FORCE_UNPUBLISH: '强制下架',
+  FORCE_REPUBLISH: '强制上架',
+  PLUGIN_DELETE: '删除插件',
+  ROLLBACK: '回滚版本',
+  DELETE: '删除版本',
+}
+
+const getVersionActionLabel = (action: string) => {
+  return actionLabelMap[action] || action
+}
+
+const getVersionActionTarget = (log: VersionAction) => {
+  if (log.action === 'ROLLBACK') {
+    return `${log.fromVersion || '-'} -> ${log.toVersion || '-'}`
+  }
+  if (log.targetVersion) {
+    return `目标版本：${log.targetVersion}`
+  }
+  return '-'
+}
 </script>
 
 <template>
@@ -76,16 +105,15 @@ const versionReasonModel = computed({
     </div>
 
     <NCard class="mt-8 shadow-sm rounded-xl border-gray-100 dark:border-gray-800" title="版本日志">
-      <NEmpty v-if="!versionActionLogs.length" description="暂无回滚/删除记录" class="my-6" />
+      <NEmpty v-if="!versionActionLogs.length" description="暂无版本操作记录" class="my-6" />
       <div v-else class="flex flex-col gap-3 mt-3">
         <NCard v-for="log in versionActionLogs" :key="log.id" size="small" class="bg-gray-50/50 dark:bg-gray-800/30 rounded-lg">
           <div class="flex items-center justify-between gap-3 mb-2">
-            <strong class="font-medium text-gray-800 dark:text-gray-200">{{ log.action === 'ROLLBACK' ? '回滚记录' : '删除记录' }}</strong>
+            <strong class="font-medium text-gray-800 dark:text-gray-200">{{ getVersionActionLabel(log.action) }}</strong>
             <small class="text-gray-400">{{ formatDate(log.createdAt) }}</small>
           </div>
           <p class="text-gray-500 dark:text-gray-400 text-sm m-0 mt-1">操作人：{{ log.operator.username }}</p>
-          <p class="text-gray-500 dark:text-gray-400 text-sm m-0 mt-0.5" v-if="log.action === 'ROLLBACK'">{{ log.fromVersion || '-' }} -> {{ log.toVersion || '-' }}</p>
-          <p class="text-gray-500 dark:text-gray-400 text-sm m-0 mt-0.5" v-else>目标版本：{{ log.targetVersion || '-' }}</p>
+          <p class="text-gray-500 dark:text-gray-400 text-sm m-0 mt-0.5">{{ getVersionActionTarget(log) }}</p>
           <small class="block bg-gray-100 dark:bg-gray-800 p-2 mt-2 rounded text-gray-600 dark:text-gray-300">{{ log.reason || '无说明' }}</small>
         </NCard>
       </div>

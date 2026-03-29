@@ -610,6 +610,7 @@ onMounted(async () => {
             v-model:value="localBindForm.password"
             type="password"
             show-password-on="click"
+            :input-props="{ autocomplete: 'new-password' }"
             :placeholder="t('account.security.newPasswordPlaceholder')"
           />
         </NFormItem>
@@ -619,6 +620,7 @@ onMounted(async () => {
             v-model:value="localBindForm.confirmPassword"
             type="password"
             show-password-on="click"
+            :input-props="{ autocomplete: 'new-password' }"
             :placeholder="t('account.security.confirmNewPasswordPlaceholder')"
           />
         </NFormItem>

@@ -6,6 +6,7 @@ export function usePluginStatus() {
   const getPluginStatusType = (status?: PluginStatus | string): PluginStatusType => {
     if (status === 'APPROVED') return 'success';
     if (status === 'REJECTED') return 'error';
+    if (status === 'CHANGES_REQUIRED') return 'warning';
     if (status === 'PENDING') return 'warning';
     return 'default';
   };
@@ -13,6 +14,7 @@ export function usePluginStatus() {
   const getPluginStatusLabel = (status?: PluginStatus | string) => {
     if (status === 'APPROVED') return '已通过';
     if (status === 'REJECTED') return '已拒绝';
+    if (status === 'CHANGES_REQUIRED') return '需修改';
     if (status === 'PENDING') return '待审核';
     return '-';
   };

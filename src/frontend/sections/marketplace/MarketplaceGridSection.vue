@@ -38,7 +38,18 @@ const { t } = useI18n()
           </div>
         </div>
 
-        <h3 class="text-1.2rem font-700 text-text-main mb-2">{{ plugin.name }}</h3>
+        <div class="mb-2 flex items-center gap-2">
+          <h3 class="text-1.2rem font-700 text-text-main m-0">{{ plugin.name }}</h3>
+          <NTag size="small" round type="info">
+            {{
+              plugin.kind === 'site-detector'
+                ? t('marketplace.kindSiteDetector')
+                : plugin.kind === 'editor-adapter'
+                  ? t('marketplace.kindEditorAdapter')
+                  : t('marketplace.kindUploader')
+            }}
+          </NTag>
+        </div>
         <p class="text-text-secondary text-0.9rem mb-4 line-clamp-2 min-h-2.7em">
           {{ plugin.description }}
         </p>

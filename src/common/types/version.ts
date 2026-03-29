@@ -1,8 +1,8 @@
-import type { PluginVersion } from './plugin';
+import type { PluginVersion, PluginVersionActionType } from './plugin';
 
 export interface VersionAction {
   id: string;
-  action: 'ROLLBACK' | 'DELETE';
+  action: PluginVersionActionType;
   fromVersion: string | null;
   toVersion: string | null;
   targetVersion: string | null;

@@ -3,7 +3,9 @@ import { isNavigationFailure, NavigationFailureType } from 'vue-router';
 import router from '@/router';
 import { useAuthStore } from '@common/stores/auth';
 
-const DEFAULT_API_BASE_URL = 'https://server.fileup.dev/api';
+const DEFAULT_API_BASE_URL = import.meta.env.DEV
+  ? 'http://127.0.0.1:3000/api'
+  : 'https://server.fileup.dev/api';
 
 export const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
@@ -67,4 +69,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-

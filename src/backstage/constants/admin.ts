@@ -18,6 +18,7 @@ export const ADMIN_STATUS_OPTIONS: SelectOption[] = [
   { label: '全部状态', value: 'ALL' },
   { label: '待审核', value: 'PENDING' },
   { label: '已通过', value: 'APPROVED' },
+  { label: '需修改', value: 'CHANGES_REQUIRED' },
   { label: '已拒绝', value: 'REJECTED' },
 ]
 

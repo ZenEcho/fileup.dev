@@ -278,6 +278,7 @@ onMounted(() => {
                   v-model:value="mailForm.smtpPass"
                   type="password"
                   show-password-on="click"
+                  :input-props="{ autocomplete: 'new-password' }"
                   :placeholder="mailForm.smtpPassConfigured ? t('admin.settings.keepSecretTip') : t('admin.settings.secretPlaceholder')"
                 />
               </NFormItem>
@@ -327,6 +328,7 @@ onMounted(() => {
                   v-model:value="captchaForm.secret"
                   type="password"
                   show-password-on="click"
+                  :input-props="{ autocomplete: 'new-password' }"
                   :placeholder="captchaForm.secretConfigured ? t('admin.settings.keepSecretTip') : t('admin.settings.secretPlaceholder')"
                 />
               </NFormItem>

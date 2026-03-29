@@ -11,6 +11,7 @@
         <NInput
           v-model:value="newPassword"
           type="password"
+          :input-props="{ autocomplete: 'new-password' }"
           :placeholder="t('auth.newPasswordPlaceholder')"
           show-password-on="click"
         />
@@ -19,6 +20,7 @@
         <NInput
           v-model:value="confirmNewPassword"
           type="password"
+          :input-props="{ autocomplete: 'new-password' }"
           :placeholder="t('auth.confirmPasswordPlaceholder')"
           show-password-on="click"
           @keyup.enter="submit"

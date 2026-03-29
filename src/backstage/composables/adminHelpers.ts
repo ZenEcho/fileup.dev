@@ -1,5 +1,10 @@
 import type { DownloadDetail, PluginEntity } from '@common/types';
-import { validatePluginContent } from '@common/utils/plugin';
+import {
+  isEditorAdapterPlugin,
+  isSiteDetectorPlugin,
+  isUploaderPlugin,
+  validatePluginContent,
+} from '@common/utils/plugin';
 
 export interface RiskAnalysisResult {
   score: number;
@@ -67,13 +72,32 @@ export function analyzePluginRisk(content: unknown): RiskAnalysisResult {
     return { score: 0, level: 'LOW', rules: [], script: '' };
   }
 
-  const scripts = [validated.content.script, ...validated.content.inputs.map((input) => input.dataSource?.script || '')]
-    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  const scripts: string[] = [];
+  if (isUploaderPlugin(validated.content)) {
+    scripts.push(
+      validated.content.uploader.script,
+      ...validated.content.uploader.inputs.map((input) => input.dataSource?.script || ''),
+    );
+  } else if (isSiteDetectorPlugin(validated.content)) {
+    scripts.push(
+      validated.content.detector.detectScript,
+      validated.content.detector.extractScript,
+    );
+  } else if (isEditorAdapterPlugin(validated.content)) {
+    scripts.push(
+      validated.content.editorAdapter.detectScript,
+      validated.content.editorAdapter.injectScript,
+    );
+  }
+
+  const filteredScripts = scripts.filter(
+    (item): item is string => typeof item === 'string' && item.trim().length > 0,
+  );
 
   const rules: string[] = [];
   let score = 0;
 
-  scripts.forEach((script) => {
+  filteredScripts.forEach((script) => {
     if (/eval\s*\(/i.test(script)) {
       rules.push('eval 执行');
       score += 25;
@@ -90,13 +114,37 @@ export function analyzePluginRisk(content: unknown): RiskAnalysisResult {
       rules.push('外链 fetch');
       score += 10;
     }
+    if (/sendMessage\s*\(/i.test(script)) {
+      rules.push('跨上下文消息调用');
+      score += 12;
+    }
   });
+
+  if (isSiteDetectorPlugin(validated.content)) {
+    const match = validated.content.detector.match;
+    const actionFormCount = validated.content.detector.actionForm?.length || 0;
+    const hasBroadDomainMatch = Boolean(
+      match?.domainSuffixes?.length ||
+      match?.urlPatterns?.some((pattern) => /\*|\.\*/.test(pattern)) ||
+      match?.domains?.some((domain) => domain === '*' || domain.startsWith('*.')),
+    );
+
+    if (hasBroadDomainMatch) {
+      rules.push('广泛域名匹配');
+      score += 8;
+    }
+
+    if (actionFormCount > 0) {
+      rules.push('宿主交互表单');
+      score += 5;
+    }
+  }
 
   const level = score >= 65 ? 'HIGH' : score >= 30 ? 'MEDIUM' : 'LOW';
   return {
     score: Math.min(100, score),
     level,
     rules: Array.from(new Set(rules)),
-    script: scripts[0] || '',
+    script: filteredScripts[0] || '',
   };
 }

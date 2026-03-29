@@ -72,6 +72,7 @@ defineExpose({
           v-model:value="form.currentPassword"
           type="password"
           show-password-on="click"
+          :input-props="{ autocomplete: 'current-password' }"
           :placeholder="t('account.security.currentPasswordPlaceholder')"
         />
       </NFormItem>
@@ -81,6 +82,7 @@ defineExpose({
           v-model:value="form.newPassword"
           type="password"
           show-password-on="click"
+          :input-props="{ autocomplete: 'new-password' }"
           :placeholder="t('account.security.newPasswordPlaceholder')"
         />
       </NFormItem>
@@ -90,6 +92,7 @@ defineExpose({
           v-model:value="form.confirmNewPassword"
           type="password"
           show-password-on="click"
+          :input-props="{ autocomplete: 'new-password' }"
           :placeholder="t('account.security.confirmNewPasswordPlaceholder')"
         />
       </NFormItem>

@@ -24,6 +24,7 @@ const props = defineProps<{
 const {
   t,
   hasErrors,
+  unsupportedKindMessage,
   pluginContent,
   isInputVisible,
   isInputDisabled,
@@ -52,6 +53,9 @@ const {
   <div class="mt-4">
     <NAlert v-if="hasErrors" type="warning" :title="t('pluginPreview.invalidTitle')">
       {{ t('submit.fixJsonToTest') }}
+    </NAlert>
+    <NAlert v-else-if="unsupportedKindMessage" type="info">
+      {{ unsupportedKindMessage }}
     </NAlert>
 
     <NCard v-else-if="pluginContent" size="small" :bordered="false" class="bg-gray-50 rounded-xl">
@@ -123,6 +127,7 @@ const {
                   <NInput v-model:value="configFields[input.name]"
                     :type="input.type === 'password' ? 'password' : 'text'"
                     :show-password-on="input.type === 'password' ? 'click' : undefined"
+                    :input-props="input.type === 'password' ? { autocomplete: 'new-password' } : undefined"
                     :placeholder="getInputPlaceholder(input, input.name)" class="w-full"
                     :disabled="isInputDisabled(input)" />
                 </template>

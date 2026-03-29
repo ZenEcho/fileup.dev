@@ -2,7 +2,14 @@ import { computed } from 'vue'
 import type { Ref } from 'vue'
 import { useDateFormat } from '@common/composables'
 import { parseNumber } from '@backstage/composables'
-import type { DownloadDetail, PendingItem, PluginEntity, UserRow } from '@common/types'
+import type {
+  DownloadDetail,
+  PendingItem,
+  PluginEntity,
+  PluginStatus,
+  PluginVersionActionType,
+  UserRow,
+} from '@common/types'
 
 export function useAdminMetrics(context: {
   allPlugins: Ref<PluginEntity[]>
@@ -42,20 +49,31 @@ export function useAdminMetrics(context: {
     return [...context.allPlugins.value].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 8)
   })
 
+  const auditActionStatusMap: Partial<Record<PluginVersionActionType, PluginStatus>> = {
+    AUDIT_APPROVED: 'APPROVED',
+    AUDIT_REJECTED: 'REJECTED',
+    AUDIT_CHANGES_REQUIRED: 'CHANGES_REQUIRED',
+  }
+
   const auditRows = computed(() => {
     const rows = context.allPlugins.value.flatMap((plugin) => {
-      return plugin.versions
-        .filter((version) => version.status !== 'PENDING')
-        .map((version) => ({
-          key: `${plugin.id}:${version.version}`,
+      return (plugin.versionActionLogs || []).flatMap((action) => {
+        const status = auditActionStatusMap[action.action]
+        if (!status) {
+          return []
+        }
+
+        return [{
+          key: action.id,
           pluginId: plugin.id,
           pluginName: plugin.name,
-          version: version.version,
-          status: version.status,
-          auditor: version.auditorId || '-',
-          auditLog: version.auditLog || '-',
-          createdAt: version.createdAt,
-        }))
+          version: action.targetVersion || '-',
+          status,
+          auditor: action.operator?.username || '-',
+          auditLog: action.reason || '-',
+          createdAt: action.createdAt,
+        }]
+      })
     })
     return rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   })

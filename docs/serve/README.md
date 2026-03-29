@@ -12,7 +12,7 @@
 | M2 运营后台 | `admin_console_redesign.md` | `/admin` 工作台 IA、运营动作、真实/演示边界 | `plugins.controller.ts`、`admin-users.controller.ts`、`system-settings.controller.ts` |
 | M3 版本生命周期 | `plugin_version_management.md` | `activeVersion`、回滚、软删除、版本审计日志 | `Plugin.activeVersionId`、`PluginVersion.deletedAt`、`PluginVersionActionLog` |
 | M4 评价闭环 | `plugin_review_system.md` | 评价发布、作者/管理员回复、删除与展示兼容层 | `PluginReview`、`PluginReviewReply`、`/plugins/:id/reviews*` |
-| M5 市场通讯 | `plugin_market_api.md` | Web 市场与 GioPic 扩展消息协议、安装载荷约束 | `PluginVersion.content`、`window.postMessage` 协议、`PluginMarketplace.vue` |
+| M5 市场通讯 | `plugin_market_api.md` | Web 市场与 GioPic 扩展消息协议、统一 `kind` 载荷约束（`uploader.* / detector.*`，含 uploader 旧字段兼容） | `PluginVersion.content`、`window.postMessage` 协议、`PluginMarketplace.vue` |
 | M6 账号与系统设置 | `auth_account_system_settings.md` | 本地账号、GitHub/Google OAuth、邮箱验证、多 provider 绑定/解绑/恢复绑定、管理员用户治理、系统邮件/验证码配置 | `/auth/*`、`/users/*`、`/admin/users/*`、`/admin/settings/*` |
 | M7 数据库迁移 | `database_migrations_20260309.md` | 2026-03-08 ~ 2026-03-10 数据库结构增量（含 OAuth 解绑支持）、上线顺序与兼容要点 | `prisma/schema.prisma`、`prisma/migrations/*`、`docs/prisma-baseline-and-deploy.md` |
 
@@ -28,7 +28,7 @@
 | 能力点 | 归属模块 | 说明 |
 | --- | --- | --- |
 | NestJS + Prisma + MySQL 架构与统一接口前缀 | M1 | 作为唯一基线，不在业务模块重复定义 |
-| 插件提交/审核/市场安装流程 | M1 + M2 + M3 + M5 | M1 讲主流程，M2 讲后台操作，M3 讲版本治理，M5 讲安装协议 |
+| 插件提交/审核/市场安装流程 | M1 + M2 + M3 + M5 | M1 讲主流程，M2 讲后台操作，M3 讲版本治理，M5 讲双类型插件与完整 `content` 安装协议 |
 | 评价系统权限与接口 | M4 | “单次评价 + 多次回复 + 兼容 authorReply” |
 | 本地注册登录、GitHub/Google OAuth、邮箱验证、账号绑定/解绑/恢复绑定、密码重置 | M6 | 覆盖 `/auth` + `/users` + `/admin/users` |
 | 邮件与验证码系统配置 | M6 | 覆盖 `/admin/settings/mail`、`/admin/settings/captcha` |

@@ -93,6 +93,10 @@ const editPlugin = (pluginId: string) => {
   router.push(`/plugins/submit?edit=${pluginId}`)
 }
 
+const isReviewRejectedLike = (status?: string) => {
+  return status === 'REJECTED' || status === 'CHANGES_REQUIRED'
+}
+
 const toggleVisibility = async (plugin: PluginListItem) => {
   try {
     const newStatus = !plugin.isPublic
@@ -101,7 +105,17 @@ const toggleVisibility = async (plugin: PluginListItem) => {
     })
     plugin.isPublic = newStatus
     message.success(newStatus ? t('dashboard.published') : t('dashboard.unpublished'))
-  } catch {
+  } catch (error) {
+    const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code
+    if (code === 'PLUGIN_VISIBILITY_ADMIN_DISABLED') {
+      const reason = plugin.adminDisableReason?.trim()
+      if (reason) {
+        message.warning(t('dashboard.adminDisabledWithReason', { reason }))
+      } else {
+        message.warning(t('dashboard.adminDisabled'))
+      }
+      return
+    }
     message.error(t('dashboard.opFailed'))
   }
 }
@@ -134,6 +148,20 @@ const canRollback = (item: PluginVersion) => {
 
 const canDeleteVersion = (item: PluginVersion) => {
   return !item.isActive
+}
+
+const getLatestRejectedReason = (plugin: PluginListItem) => {
+  const latest = plugin.versions[0]
+  if (!latest || !isReviewRejectedLike(latest.status)) {
+    return ''
+  }
+  const reason = latest.auditLog?.trim()
+  return reason || t('dashboard.versionManager.noRejectReason')
+}
+
+const getRejectReason = (item: PluginVersion) => {
+  const reason = item.auditLog?.trim()
+  return reason || t('dashboard.versionManager.noRejectReason')
 }
 
 const showVersionError = (error: unknown, fallbackKey: string) => {
@@ -259,7 +287,17 @@ const deleteVersion = async (item: PluginVersion) => {
           </div>
 
           <h3 class="text-1.1rem font-700 text-text-main mb-1 truncate">{{ plugin.name }}</h3>
-          <p class="text-0.8rem text-text-tertiary mb-4">ID: {{ plugin.id }}</p>
+          <p class="text-0.8rem text-text-tertiary">ID: {{ plugin.id }}</p>
+          <p v-if="isReviewRejectedLike(plugin.versions[0]?.status)" class="text-0.8rem text-red-500 mt-1 mb-2 line-clamp-2">
+            {{ t('dashboard.versionManager.reviewReasonLabel') }}: {{ getLatestRejectedReason(plugin) }}
+          </p>
+          <p
+            v-if="plugin.adminDisabled && plugin.adminDisableReason"
+            class="text-0.8rem text-amber-600 mt-1 mb-4 line-clamp-2"
+          >
+            {{ t('dashboard.adminDisabledReasonLabel') }}: {{ plugin.adminDisableReason }}
+          </p>
+          <div v-else class="mb-4" />
 
           <div class="flex gap-2 mt-4">
             <NButton size="small" class="flex-1" @click="editPlugin(plugin.id)">
@@ -337,6 +375,9 @@ const deleteVersion = async (item: PluginVersion) => {
 
             <p class="text-0.9rem text-text-secondary mt-2 whitespace-pre-wrap">
               {{ item.changelog || t('dashboard.versionManager.noChangelog') }}
+            </p>
+            <p v-if="isReviewRejectedLike(item.status)" class="text-0.85rem text-red-500 mt-2 whitespace-pre-wrap">
+              {{ t('dashboard.versionManager.reviewReasonLabel') }}: {{ getRejectReason(item) }}
             </p>
 
             <div class="flex flex-wrap items-center gap-2 mt-3">

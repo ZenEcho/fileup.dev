@@ -7,6 +7,7 @@ import { useMessage } from 'naive-ui'
 import { useAdminContext } from '@backstage/composables/useAdminContext'
 import { useAdminVersionManagement } from '@backstage/composables'
 import { useDateFormat, usePluginStatus } from '@common/composables'
+import type { PluginStatus, PluginVersionActionType } from '@common/types'
 
 import AdminPageHeader from '@backstage/components/common/AdminPageHeader.vue'
 import AdminSystemLogsSection from '@backstage/sections/admin/AdminSystemLogsSection.vue'
@@ -21,20 +22,31 @@ const pluginOptions = computed<SelectOption[]>(() => {
   return allPlugins.value.map((plugin) => ({ label: plugin.name, value: plugin.id }))
 })
 
+const auditActionStatusMap: Partial<Record<PluginVersionActionType, PluginStatus>> = {
+  AUDIT_APPROVED: 'APPROVED',
+  AUDIT_REJECTED: 'REJECTED',
+  AUDIT_CHANGES_REQUIRED: 'CHANGES_REQUIRED',
+}
+
 const auditRows = computed(() => {
   const rows = allPlugins.value.flatMap((plugin) => {
-    return plugin.versions
-      .filter((version) => version.status !== 'PENDING')
-      .map((version) => ({
-        key: `${plugin.id}:${version.version}`,
+    return (plugin.versionActionLogs || []).flatMap((action) => {
+      const status = auditActionStatusMap[action.action]
+      if (!status) {
+        return []
+      }
+
+      return [{
+        key: action.id,
         pluginId: plugin.id,
         pluginName: plugin.name,
-        version: version.version,
-        status: version.status,
-        auditor: version.auditorId || '-',
-        auditLog: version.auditLog || '-',
-        createdAt: version.createdAt,
-      }))
+        version: action.targetVersion || '-',
+        status,
+        auditor: action.operator?.username || '-',
+        auditLog: action.reason || '-',
+        createdAt: action.createdAt,
+      }]
+    })
   })
   return rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 })

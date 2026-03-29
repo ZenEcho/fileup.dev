@@ -26,6 +26,7 @@ export function useAdminPluginManagement(options: UseAdminPluginManagementOption
   const manageAuthor = ref<string | null>(null)
   const manageStatus = ref<AdminStatusFilter>('ALL')
   const selectedManagePluginId = ref('')
+  const visibilityReason = ref('')
 
   const filteredPlugins = computed(() => {
     const keyword = manageKeyword.value.trim().toLowerCase()
@@ -50,18 +51,30 @@ export function useAdminPluginManagement(options: UseAdminPluginManagementOption
     action: string,
     mode: VisibilityMode = 'NORMAL'
   ) => {
+    const reason = visibilityReason.value.trim()
+    if (!visible && !reason) {
+      message.warning('下架或隐藏时请填写原因')
+      return
+    }
+
     try {
       await updatePluginVisibility(plugin.id, {
         isPublic: visible,
         mode,
+        reason: reason || undefined,
       })
-      addLog('plugin', action, plugin.id, 'SUCCESS', `${mode}: ${visible ? 'isPublic=true' : 'isPublic=false'}`)
+      addLog('plugin', action, plugin.id, 'SUCCESS', `${mode}: ${visible ? 'isPublic=true' : 'isPublic=false'}${reason ? `, reason=${reason}` : ''}`)
       message.success(`${plugin.name} 已${visible ? '上架' : '下架'}`)
+      visibilityReason.value = ''
       await refreshAll()
     } catch (error) {
       const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code
       if (code === 'PLUGIN_VISIBILITY_ADMIN_DISABLED') {
         message.warning('该插件已被管理员强制下架，请使用“重新上架”解除强制状态')
+      } else if (code === 'PLUGIN_VISIBILITY_REASON_REQUIRED') {
+        message.warning('下架或隐藏时请填写原因')
+      } else if (code === 'PLUGIN_VISIBILITY_REASON_TOO_LONG') {
+        message.warning('下架原因过长，请控制在 500 字以内')
       } else {
         message.error('操作失败')
       }
@@ -96,6 +109,7 @@ export function useAdminPluginManagement(options: UseAdminPluginManagementOption
     manageKeyword,
     manageAuthor,
     manageStatus,
+    visibilityReason,
     selectedManagePluginId,
     filteredPlugins,
     selectedManagePlugin,

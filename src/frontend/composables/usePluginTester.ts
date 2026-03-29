@@ -1,8 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMessage, type UploadFileInfo } from 'naive-ui'
-import { validatePluginContent } from '@common/utils/plugin'
-import type { PluginInputSchema } from '@common/utils/plugin'
+import { isUploaderPlugin, validatePluginContent } from '@common/utils/plugin'
+import type { PluginInputSchema, UploaderRuntimeSchema } from '@common/utils/plugin'
 import { createPluginTesterCtx, evaluatePluginScript } from './pluginTester'
 
 export function usePluginTester(content: Ref<unknown>) {
@@ -27,8 +27,20 @@ export function usePluginTester(content: Ref<unknown>) {
   
   // Validation & Normalization
   const validation = computed(() => validatePluginContent(content.value))
-  const pluginContent = computed(() => validation.value.content || null)
+  const pluginContent = computed<UploaderRuntimeSchema | null>(() => {
+    const validatedContent = validation.value.content
+    if (!validatedContent || !isUploaderPlugin(validatedContent)) {
+      return null
+    }
+    return validatedContent.uploader
+  })
   const hasErrors = computed(() => !validation.value.valid)
+  const unsupportedKindMessage = computed(() => {
+    if (!validation.value.valid || !validation.value.content) {
+      return ''
+    }
+    return pluginContent.value ? '' : t('submit.testerOnlyUploader')
+  })
   
   function isRecord(value: unknown): value is Record<string, any> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -443,6 +455,15 @@ export function usePluginTester(content: Ref<unknown>) {
   // Initialize form from inputs default values
   watch(pluginContent, (newConfig) => {
     if (!newConfig || !newConfig.inputs) {
+      configFields.value = {}
+      dynamicOptions.value = {}
+      dynamicHelp.value = {}
+      dynamicPlaceholder.value = {}
+      kvPairRows.value = {}
+      dataSourceErrors.value = {}
+      isFetchingSource.value = {}
+      dataSourceSignatures.clear()
+      dataSourceRequestTokens.clear()
       return
     }
   
@@ -644,6 +665,7 @@ export function usePluginTester(content: Ref<unknown>) {
   return {
     t,
     hasErrors,
+    unsupportedKindMessage,
     pluginContent,
     isInputVisible,
     isInputDisabled,

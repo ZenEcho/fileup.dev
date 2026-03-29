@@ -32,6 +32,7 @@ const {
   manageKeyword,
   manageAuthor,
   manageStatus,
+  visibilityReason,
   selectedManagePluginId,
   filteredPlugins,
   selectedManagePlugin,
@@ -56,6 +57,7 @@ const {
       :manage-keyword="manageKeyword"
       :manage-author="manageAuthor"
       :manage-status="manageStatus"
+      :visibility-reason="visibilityReason"
       :author-options="authorOptions"
       :status-options="statusOptions as any"
       :filtered-plugins="filteredPlugins"
@@ -71,6 +73,7 @@ const {
       @update:manage-keyword="manageKeyword = $event"
       @update:manage-author="manageAuthor = $event"
       @update:manage-status="manageStatus = $event"
+      @update:visibility-reason="visibilityReason = $event"
       @update:selected-manage-plugin-id="selectedManagePluginId = $event"
     />
   </div>

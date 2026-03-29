@@ -59,7 +59,7 @@ defineProps<{
               v-model:value="reviewOpinionMap[item.key]"
               type="textarea"
               :autosize="{ minRows: 2, maxRows: 4 }"
-              maxlength="300"
+              maxlength="500"
               show-count
               placeholder="填写审核意见"
               class="mb-4"
@@ -70,7 +70,8 @@ defineProps<{
             <template #action>
               <NSpace justify="end">
                 <NButton size="small" @click="onShowRiskModal(item.key)">风险详情</NButton>
-                <NButton type="error" secondary @click="onAuditPending(item, 'REJECTED')">审核拒绝</NButton>
+                <NButton type="warning" secondary @click="onAuditPending(item, 'CHANGES_REQUIRED')">打回修改</NButton>
+                <NButton type="error" secondary @click="onAuditPending(item, 'REJECTED')">拒绝通过</NButton>
                 <NButton type="success" @click="onAuditPending(item, 'APPROVED')">审核通过</NButton>
               </NSpace>
             </template>

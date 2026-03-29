@@ -19,6 +19,7 @@
         <NInput
           v-model:value="password"
           type="password"
+          :input-props="{ autocomplete: 'current-password' }"
           :placeholder="t('auth.passwordPlaceholder')"
           show-password-on="click"
           @keyup.enter="submitLogin"

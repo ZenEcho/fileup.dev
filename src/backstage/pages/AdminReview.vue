@@ -149,6 +149,7 @@ const {
   manageKeyword,
   manageAuthor,
   manageStatus,
+  visibilityReason,
   filteredPlugins,
   selectedManagePlugin,
   updateVisibility,
@@ -278,6 +279,7 @@ onMounted(async () => {
               :manage-keyword="manageKeyword"
               :manage-author="manageAuthor"
               :manage-status="manageStatus"
+              :visibility-reason="visibilityReason"
               :author-options="authorOptions as any"
               :status-options="statusOptions as any"
               :filtered-plugins="filteredPlugins"
@@ -293,6 +295,7 @@ onMounted(async () => {
               @update:manage-keyword="manageKeyword = $event"
               @update:manage-author="manageAuthor = $event"
               @update:manage-status="manageStatus = $event"
+              @update:visibility-reason="visibilityReason = $event"
               @update:selected-manage-plugin-id="selectedManagePluginId = $event"
             />
           </section>

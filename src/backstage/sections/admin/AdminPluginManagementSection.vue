@@ -9,6 +9,7 @@ const props = defineProps<{
   manageKeyword: string
   manageAuthor: string | null
   manageStatus: 'ALL' | PluginStatus
+  visibilityReason: string
   authorOptions: SelectOption[]
   statusOptions: SelectOption[]
   filteredPlugins: PluginEntity[]
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   (event: 'update:manageKeyword', value: string): void
   (event: 'update:manageAuthor', value: string | null): void
   (event: 'update:manageStatus', value: 'ALL' | PluginStatus): void
+  (event: 'update:visibilityReason', value: string): void
   (event: 'update:selectedManagePluginId', value: string): void
 }>()
 
@@ -43,6 +45,11 @@ const manageAuthorModel = computed({
 const manageStatusModel = computed({
   get: () => props.manageStatus,
   set: (value: 'ALL' | PluginStatus) => emit('update:manageStatus', value),
+})
+
+const visibilityReasonModel = computed({
+  get: () => props.visibilityReason,
+  set: (value: string) => emit('update:visibilityReason', value),
 })
 
 const selectedManagePluginIdModel = computed({
@@ -111,6 +118,20 @@ const selectedManagePluginIdModel = computed({
           <div><strong class="text-gray-900 dark:text-gray-100 block mb-1">下载统计</strong>{{ formatNumber(parseNumber(selectedManagePlugin.downloads)) }}</div>
           <div><strong class="text-gray-900 dark:text-gray-100 block mb-1">当前版本</strong>v{{ selectedManagePlugin.versions[0]?.version || '-' }}</div>
         </div>
+
+        <NInput
+          v-model:value="visibilityReasonModel"
+          class="mb-4"
+          type="textarea"
+          :autosize="{ minRows: 2, maxRows: 4 }"
+          maxlength="500"
+          show-count
+          placeholder="可见性操作说明（下架/隐藏必填，开发者可见）"
+        />
+
+        <p v-if="selectedManagePlugin.adminDisableReason" class="text-0.85rem text-amber-600 dark:text-amber-400 mb-4 whitespace-pre-wrap">
+          当前下架原因：{{ selectedManagePlugin.adminDisableReason }}
+        </p>
 
         <div class="flex flex-wrap gap-3 mb-6">
           <NButton type="warning" secondary @click="onUpdateVisibility(selectedManagePlugin, false, '强制下架', 'FORCE')">强制下架</NButton>

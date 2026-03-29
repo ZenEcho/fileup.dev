@@ -6,7 +6,7 @@ import { useAdminContext } from '@backstage/composables/useAdminContext'
 import { useDateFormat, usePluginStatus } from '@common/composables'
 import { analyzePluginRisk } from '@backstage/composables'
 import { auditPluginVersion } from '@common/api'
-import type { PendingItem, PluginStatus } from '@common/types'
+import type { PendingItem, PluginStatus, PluginVersionActionType } from '@common/types'
 
 import AdminPageHeader from '@backstage/components/common/AdminPageHeader.vue'
 import AdminPluginReviewSection from '@backstage/sections/admin/AdminPluginReviewSection.vue'
@@ -34,20 +34,31 @@ const pendingItems = computed<PendingItem[]>(() => {
   })
 })
 
+const auditActionStatusMap: Partial<Record<PluginVersionActionType, PluginStatus>> = {
+  AUDIT_APPROVED: 'APPROVED',
+  AUDIT_REJECTED: 'REJECTED',
+  AUDIT_CHANGES_REQUIRED: 'CHANGES_REQUIRED',
+}
+
 const auditRows = computed(() => {
   const rows = allPlugins.value.flatMap((plugin) => {
-    return plugin.versions
-      .filter((version) => version.status !== 'PENDING')
-      .map((version) => ({
-        key: `${plugin.id}:${version.version}`,
+    return (plugin.versionActionLogs || []).flatMap((action) => {
+      const status = auditActionStatusMap[action.action]
+      if (!status) {
+        return []
+      }
+
+      return [{
+        key: action.id,
         pluginId: plugin.id,
         pluginName: plugin.name,
-        version: version.version,
-        status: version.status,
-        auditor: version.auditorId || '-',
-        auditLog: version.auditLog || '-',
-        createdAt: version.createdAt,
-      }))
+        version: action.targetVersion || '-',
+        status,
+        auditor: action.operator?.username || '-',
+        auditLog: action.reason || '-',
+        createdAt: action.createdAt,
+      }]
+    })
   })
   return rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 })
@@ -83,13 +94,35 @@ const showRiskModal = (key: string) => {
 
 const auditPending = async (item: PendingItem, status: PluginStatus) => {
   if (status === 'PENDING') return
+  const reason = (reviewOpinionMap[item.key] || '').trim()
+  if ((status === 'REJECTED' || status === 'CHANGES_REQUIRED') && !reason) {
+    message.warning('拒审或打回修改时请填写审核意见')
+    return
+  }
+  const actionLabelMap: Partial<Record<PluginStatus, string>> = {
+    APPROVED: '审核通过',
+    CHANGES_REQUIRED: '打回修改',
+    REJECTED: '拒绝通过',
+  }
+  const actionLabel = actionLabelMap[status] || '审核'
+
   try {
-    await auditPluginVersion(item.plugin.id, item.version.version, status)
-    addLog('audit', status === 'APPROVED' ? '审核通过' : '审核拒绝', `${item.plugin.id}@${item.version.version}`, 'SUCCESS', reviewOpinionMap[item.key] || '无意见')
-    message.success(status === 'APPROVED' ? '审核通过成功' : '审核拒绝成功')
+    await auditPluginVersion(item.plugin.id, item.version.version, status, reason || undefined)
+    addLog('audit', actionLabel, `${item.plugin.id}@${item.version.version}`, 'SUCCESS', reason || '无意见')
+    message.success(`${actionLabel}成功`)
+    reviewOpinionMap[item.key] = ''
     await refreshAll()
   } catch (error) {
-    addLog('audit', status === 'APPROVED' ? '审核通过' : '审核拒绝', `${item.plugin.id}@${item.version.version}`, 'FAILED', String((error as Error).message || 'Unknown'))
+    const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code
+    if (code === 'PLUGIN_VERSION_AUDIT_REASON_REQUIRED') {
+      message.warning('拒审或打回修改时请填写审核意见')
+      return
+    }
+    if (code === 'PLUGIN_VERSION_AUDIT_REASON_TOO_LONG') {
+      message.warning('审核意见过长，请控制在 500 字以内')
+      return
+    }
+    addLog('audit', actionLabel, `${item.plugin.id}@${item.version.version}`, 'FAILED', String((error as Error).message || 'Unknown'))
     message.error('审核失败')
   }
 }

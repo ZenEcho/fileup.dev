@@ -19,6 +19,19 @@ const router = useRouter();
 const authStore = useAuthStore();
 const { t } = useI18n();
 
+const resolveHashToken = () => {
+  const rawHash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+
+  if (!rawHash) {
+    return '';
+  }
+
+  const hashQuery = new URLSearchParams(rawHash);
+  return hashQuery.get('token')?.trim() || '';
+};
+
 const resolveProvider = () => {
   const providerQuery = route.query.provider;
   if (providerQuery === 'google') {
@@ -50,7 +63,7 @@ const redirectToLoginWithOAuthError = async (
 };
 
 onMounted(async () => {
-  const token = route.query.token as string | undefined;
+  const token = resolveHashToken() || (route.query.token as string | undefined);
   const code = route.query.code as string | undefined;
   const bind = route.query.bind as string | undefined;
   const oauth = route.query.oauth as string | undefined;
@@ -91,6 +104,11 @@ onMounted(async () => {
 
   if (token) {
     authStore.login(token);
+    window.history.replaceState(
+      window.history.state,
+      document.title,
+      window.location.pathname + window.location.search,
+    );
     await authStore.fetchUser();
     await router.replace('/dashboard');
     return;

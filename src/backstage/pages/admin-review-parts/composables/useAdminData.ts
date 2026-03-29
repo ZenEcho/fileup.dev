@@ -91,13 +91,34 @@ export function useAdminData(options: {
 
   const auditPending = async (item: PendingItem, status: PluginStatus) => {
     if (status === 'PENDING') return
+    const reason = (reviewOpinionMap[item.key] || '').trim()
+    if ((status === 'REJECTED' || status === 'CHANGES_REQUIRED') && !reason) {
+      options.message.warning('拒审或打回修改时请填写审核意见')
+      return
+    }
+    const actionLabelMap: Partial<Record<PluginStatus, string>> = {
+      APPROVED: '审核通过',
+      CHANGES_REQUIRED: '打回修改',
+      REJECTED: '拒绝通过',
+    }
+    const actionLabel = actionLabelMap[status] || '审核'
     try {
-      await auditPluginVersion(item.plugin.id, item.version.version, status)
-      addLog('audit', status === 'APPROVED' ? '审核通过' : '审核拒绝', `${item.plugin.id}@${item.version.version}`, 'SUCCESS', reviewOpinionMap[item.key] || '无意见')
-      options.message.success(status === 'APPROVED' ? '审核通过成功' : '审核拒绝成功')
+      await auditPluginVersion(item.plugin.id, item.version.version, status, reason || undefined)
+      addLog('audit', actionLabel, `${item.plugin.id}@${item.version.version}`, 'SUCCESS', reason || '无意见')
+      options.message.success(`${actionLabel}成功`)
+      reviewOpinionMap[item.key] = ''
       await refreshAll()
     } catch (error) {
-      addLog('audit', status === 'APPROVED' ? '审核通过' : '审核拒绝', `${item.plugin.id}@${item.version.version}`, 'FAILED', String((error as Error).message || 'Unknown'))
+      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code
+      if (code === 'PLUGIN_VERSION_AUDIT_REASON_REQUIRED') {
+        options.message.warning('拒审或打回修改时请填写审核意见')
+        return
+      }
+      if (code === 'PLUGIN_VERSION_AUDIT_REASON_TOO_LONG') {
+        options.message.warning('审核意见过长，请控制在 500 字以内')
+        return
+      }
+      addLog('audit', actionLabel, `${item.plugin.id}@${item.version.version}`, 'FAILED', String((error as Error).message || 'Unknown'))
       options.message.error('审核失败')
     }
   }
