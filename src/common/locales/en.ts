@@ -76,6 +76,21 @@ export default {
       popular: 'Most Popular',
       newest: 'Newest'
     },
+    filters: {
+      kindLabel: 'Plugin Type',
+      kindAll: 'All Types',
+      installLabel: 'Installation',
+      installAll: 'All Plugins',
+      installedOnly: 'Installed Only',
+      uninstalledOnly: 'Not Installed Only',
+      enabledLabel: 'Runtime Status',
+      enabledAll: 'All Statuses',
+      enabledOnly: 'Enabled Only',
+      disabledOnly: 'Disabled Only',
+      reset: 'Reset Filters',
+      resultCount: 'Showing {count} of {total} plugins',
+      empty: 'No plugins matched the current filters.'
+    },
     categories: {
       all: 'All',
       image_hosting: 'Image Hosting',

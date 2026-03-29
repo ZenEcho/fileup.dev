@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { NAvatar, NButton, NCard, NGrid, NGridItem, NTag } from 'naive-ui'
+import { NAvatar, NButton, NCard, NEmpty, NGrid, NGridItem, NTag } from 'naive-ui'
 import type { PluginMarketplaceItem } from '@common/types'
 
 const props = defineProps<{
@@ -18,6 +18,9 @@ const { t } = useI18n()
 <template>
   <div v-if="loading" class="flex justify-center py-20">
     <div class="animate-spin text-4xl text-primary">⌛</div>
+  </div>
+  <div v-else-if="!filteredPlugins.length" class="py-16">
+    <NEmpty :description="t('marketplace.filters.empty')" size="large" />
   </div>
   <NGrid v-else x-gap="24" y-gap="24" cols="1 s:2 m:3" responsive="screen">
     <NGridItem v-for="plugin in filteredPlugins" :key="plugin.id">

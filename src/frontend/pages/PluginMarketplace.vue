@@ -8,6 +8,7 @@ import {
   NButton,
   NDropdown,
   NInput,
+  NSelect,
   useMessage,
 } from 'naive-ui'
 import { useAuthStore } from '@common/stores/auth'
@@ -25,11 +26,20 @@ const authStore = useAuthStore()
 const { formatDateTime } = useDateFormat()
 
 type PluginMeta = PluginMarketplaceItem
+type SortBy = 'popular' | 'newest'
+type EnabledFilter = 'all' | 'enabled' | 'disabled'
+type InstalledFilter = 'all' | 'installed' | 'uninstalled'
+type KindFilter = 'all' | PluginKind
+
+const pluginKindOrder: PluginKind[] = ['uploader', 'site-detector', 'editor-adapter']
 
 const plugins = ref<PluginMeta[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
-const sortBy = ref('popular')
+const sortBy = ref<SortBy>('popular')
+const enabledFilter = ref<EnabledFilter>('all')
+const installedFilter = ref<InstalledFilter>('all')
+const kindFilter = ref<KindFilter>('all')
 const isExtensionInstalled = ref(false)
 const selectedPlugin = ref<PluginMeta | null>(null)
 const reviews = ref<PluginReview[]>([])
@@ -74,15 +84,82 @@ const isDetailsVisible = computed({
   }
 })
 
-const sortOptions = [
+const sortOptions: Array<{ label: string, value: SortBy }> = [
   { label: 'marketplace.sort.popular', value: 'popular' },
   { label: 'marketplace.sort.newest', value: 'newest' }
 ]
 
+const getPluginKindLabel = (kind: PluginKind) => {
+  if (kind === 'site-detector') {
+    return t('marketplace.kindSiteDetector')
+  }
+
+  if (kind === 'editor-adapter') {
+    return t('marketplace.kindEditorAdapter')
+  }
+
+  return t('marketplace.kindUploader')
+}
+
+const enabledFilterOptions = computed(() => [
+  { label: t('marketplace.filters.enabledAll'), value: 'all' },
+  { label: t('marketplace.filters.enabledOnly'), value: 'enabled' },
+  { label: t('marketplace.filters.disabledOnly'), value: 'disabled' }
+])
+
+const installedFilterOptions = computed(() => [
+  { label: t('marketplace.filters.installAll'), value: 'all' },
+  { label: t('marketplace.filters.installedOnly'), value: 'installed' },
+  { label: t('marketplace.filters.uninstalledOnly'), value: 'uninstalled' }
+])
+
+const kindFilterOptions = computed(() => {
+  const availableKinds = new Set(plugins.value.map((plugin) => plugin.kind))
+
+  return [
+    { label: t('marketplace.filters.kindAll'), value: 'all' },
+    ...pluginKindOrder
+      .filter((kind) => availableKinds.has(kind))
+      .map((kind) => ({
+        label: getPluginKindLabel(kind),
+        value: kind
+      }))
+  ]
+})
+
+const hasActiveFilters = computed(() => {
+  return (
+    searchQuery.value.trim().length > 0 ||
+    sortBy.value !== 'popular' ||
+    enabledFilter.value !== 'all' ||
+    installedFilter.value !== 'all' ||
+    kindFilter.value !== 'all'
+  )
+})
+
+const resetFilters = () => {
+  searchQuery.value = ''
+  sortBy.value = 'popular'
+  enabledFilter.value = 'all'
+  installedFilter.value = 'all'
+  kindFilter.value = 'all'
+}
+
 const filteredPlugins = computed(() => {
-  const lowerQuery = searchQuery.value.toLowerCase()
+  const lowerQuery = searchQuery.value.trim().toLowerCase()
   const result = plugins.value.filter((plugin) => {
-    return plugin.name.toLowerCase().includes(lowerQuery) || plugin.description.toLowerCase().includes(lowerQuery)
+    const matchesSearch = !lowerQuery
+      || plugin.name.toLowerCase().includes(lowerQuery)
+      || plugin.description.toLowerCase().includes(lowerQuery)
+    const matchesEnabled = enabledFilter.value === 'all'
+      || (enabledFilter.value === 'enabled'
+        ? plugin.installed && plugin.enabled
+        : plugin.installed && !plugin.enabled)
+    const matchesInstalled = installedFilter.value === 'all'
+      || (installedFilter.value === 'installed' ? plugin.installed : !plugin.installed)
+    const matchesKind = kindFilter.value === 'all' || plugin.kind === kindFilter.value
+
+    return matchesSearch && matchesEnabled && matchesInstalled && matchesKind
   })
 
   result.sort((a, b) => {
@@ -539,6 +616,39 @@ onUnmounted(() => {
             <div class="i-ph-magnifying-glass text-text-secondary" />
           </template>
         </NInput>
+      </div>
+    </div>
+
+    <div class="mb-10 rounded-2xl border border-border bg-white/70 p-4 backdrop-blur-sm">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 items-end">
+        <label class="block">
+          <span class="mb-2 block text-0.8rem font-600 text-text-tertiary">
+            {{ t('marketplace.filters.kindLabel') }}
+          </span>
+          <NSelect v-model:value="kindFilter" :options="kindFilterOptions" />
+        </label>
+
+        <label class="block">
+          <span class="mb-2 block text-0.8rem font-600 text-text-tertiary">
+            {{ t('marketplace.filters.installLabel') }}
+          </span>
+          <NSelect v-model:value="installedFilter" :options="installedFilterOptions" />
+        </label>
+
+        <label class="block">
+          <span class="mb-2 block text-0.8rem font-600 text-text-tertiary">
+            {{ t('marketplace.filters.enabledLabel') }}
+          </span>
+          <NSelect v-model:value="enabledFilter" :options="enabledFilterOptions" />
+        </label>
+
+        <NButton block secondary round :disabled="!hasActiveFilters" @click="resetFilters">
+          {{ t('marketplace.filters.reset') }}
+        </NButton>
+      </div>
+
+      <div class="mt-3 text-0.85rem text-text-tertiary">
+        {{ t('marketplace.filters.resultCount', { count: filteredPlugins.length, total: plugins.length }) }}
       </div>
     </div>
 

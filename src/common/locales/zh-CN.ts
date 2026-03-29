@@ -76,6 +76,21 @@ export default {
       popular: '最受欢迎',
       newest: '最新上架'
     },
+    filters: {
+      kindLabel: '插件类型',
+      kindAll: '全部类型',
+      installLabel: '安装状态',
+      installAll: '全部插件',
+      installedOnly: '仅看已安装',
+      uninstalledOnly: '仅看未安装',
+      enabledLabel: '启用状态',
+      enabledAll: '全部状态',
+      enabledOnly: '仅看已启用',
+      disabledOnly: '仅看已禁用',
+      reset: '重置筛选',
+      resultCount: '当前显示 {count} / {total} 个插件',
+      empty: '当前筛选条件下没有匹配的插件。'
+    },
     categories: {
       all: '全部',
       image_hosting: '图床',
